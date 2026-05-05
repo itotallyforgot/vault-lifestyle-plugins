@@ -1207,13 +1207,13 @@ whisper = [
 
 [package.metadata]
 requires-dist = [
-    { name = "openai-whisper", marker = "extra == 'whisper'", specifier = ">=20231117" },
+    { name = "openai-whisper", marker = "extra == 'whisper'", specifier = ">=20231117,<20280101" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5" },
     { name = "typer", specifier = ">=0.12" },
     { name = "vault-lifestyle-plugins-lib", editable = "../lib" },
-    { name = "yt-dlp", specifier = ">=2024.1.0" },
+    { name = "yt-dlp", specifier = ">=2026.0.0,<2027.0.0" },
 ]
 provides-extras = ["whisper", "dev"]
 

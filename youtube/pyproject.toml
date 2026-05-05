@@ -6,7 +6,10 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "vault-lifestyle-plugins contributors" }]
 dependencies = [
-    "yt-dlp>=2024.1.0",
+    # yt-dlp ships breaking changes monthly (extractor signatures, info-dict
+    # keys, CLI flag renames). Pinned upper to avoid silent breakage; bump
+    # deliberately via Dependabot/Renovate when CI tells us to.
+    "yt-dlp>=2026.0.0,<2027.0.0",
     "pydantic>=2.0",
     "typer>=0.12",
     "vault-lifestyle-plugins-lib",
@@ -14,7 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 whisper = [
-    "openai-whisper>=20231117",
+    # Whisper releases by ISO date; pin upper to avoid silent breakage.
+    "openai-whisper>=20231117,<20280101",
 ]
 dev = [
     "pytest>=8",
