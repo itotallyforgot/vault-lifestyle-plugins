@@ -165,3 +165,36 @@ def test_config_with_no_vault_path_key_is_ignored(tmp_path: Path) -> None:
     cfg.write_text("# no vault_path key\nother = 1\n")
     with pytest.raises(VaultPathError, match="no vault path resolved"):
         resolve_vault_path(None, env={}, config_path=cfg)
+
+
+# ---------- symlink behavior (Mac-relevant: Obsidian Sync may symlink to iCloud) ----------
+
+
+def test_resolve_dereferences_symlink(tmp_path: Path) -> None:
+    """`path.resolve()` follows symlinks. Mac vaults via Obsidian Sync may sit
+    behind a symlink to iCloud; the returned path is the realpath, not the link.
+    Asserting this behavior is intentional and stable across platforms."""
+    real_vault = _make_vault(tmp_path / "real")
+    link = tmp_path / "via_symlink"
+    link.symlink_to(real_vault, target_is_directory=True)
+
+    resolved = resolve_vault_path(link, env={}, config_path=tmp_path / "absent.toml")
+
+    # Result equals the realpath of the target, not the symlink lexical path.
+    assert resolved == real_vault.resolve()
+    # And lexically NOT the symlink path itself (proves dereferencing happened).
+    assert str(resolved) != str(link)
+
+
+def test_resolve_via_env_dereferences_symlink(tmp_path: Path) -> None:
+    """Same symlink behavior for $VAULT_PATH path."""
+    real_vault = _make_vault(tmp_path / "real")
+    link = tmp_path / "via_symlink"
+    link.symlink_to(real_vault, target_is_directory=True)
+
+    resolved = resolve_vault_path(
+        None,
+        env={"VAULT_PATH": str(link)},
+        config_path=tmp_path / "absent.toml",
+    )
+    assert resolved == real_vault.resolve()
