@@ -95,5 +95,5 @@ def resolve_vault_path(
 
     raise VaultPathError(
         "no vault path resolved — pass --vault, set $VAULT_PATH, or add "
-        f"`vault_path = \"...\"` to {config_path}"
+        f'`vault_path = "..."` to {config_path}'
     )

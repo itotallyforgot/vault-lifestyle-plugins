@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -25,7 +25,7 @@ def test_minimal_valid_passes() -> None:
     fm = validate_frontmatter(_minimal_valid())
     assert fm.ingested is False
     assert fm.source_url == "https://youtu.be/dQw4w9WgXcQ"
-    assert fm.clipped_at == datetime(2026, 5, 5, 12, 0, 0, tzinfo=timezone.utc)
+    assert fm.clipped_at == datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
     assert fm.tags == []
 
 
@@ -68,7 +68,7 @@ def test_published_at_preserves_datetime_when_time_is_set() -> None:
     d = {**_minimal_valid(), "published_at": "2009-10-25T12:34:56Z"}
     fm = validate_frontmatter(d)
     assert isinstance(fm.published_at, datetime)
-    assert fm.published_at == datetime(2009, 10, 25, 12, 34, 56, tzinfo=timezone.utc)
+    assert fm.published_at == datetime(2009, 10, 25, 12, 34, 56, tzinfo=UTC)
 
 
 def test_zero_duration_accepted() -> None:
