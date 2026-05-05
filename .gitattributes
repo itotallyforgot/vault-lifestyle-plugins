@@ -1,0 +1,16 @@
+# Auto-detect text files and normalize line endings to LF on commit.
+* text=auto eol=lf
+
+# Binary files — never normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+
+# Lockfiles — preserve as-checked-in (uv writes platform markers).
+*.lock -text

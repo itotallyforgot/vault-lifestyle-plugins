@@ -115,9 +115,7 @@ def test_resolve_raises_when_path_is_not_a_vault(tmp_path: Path) -> None:
     not_a_vault = tmp_path / "junk"
     not_a_vault.mkdir()
     with pytest.raises(VaultPathError, match="does not look like a vault"):
-        resolve_vault_path(
-            not_a_vault, env={}, config_path=tmp_path / "absent.toml"
-        )
+        resolve_vault_path(not_a_vault, env={}, config_path=tmp_path / "absent.toml")
 
 
 def test_resolve_raises_when_env_path_invalid(tmp_path: Path) -> None:

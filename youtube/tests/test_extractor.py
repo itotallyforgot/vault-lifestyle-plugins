@@ -19,7 +19,6 @@ from vault_yt.extractor import (
     fetch_meta,
 )
 
-
 # ============================================================
 # fetch_meta
 # ============================================================
@@ -123,9 +122,7 @@ def test_fetch_meta_dedupes_caption_langs(mock_ytdl_class):
 def test_fetch_meta_returns_published_at_as_date_object(mock_ytdl_class):
     """published_at is a `datetime.date`, not a string — keeps the type contract
     explicit at the boundary instead of relying on Pydantic coercion downstream."""
-    cls, _ = _ytdl_mock(
-        {"id": "abc", "title": "T", "upload_date": "20091025"}
-    )
+    cls, _ = _ytdl_mock({"id": "abc", "title": "T", "upload_date": "20091025"})
     mock_ytdl_class.return_value = cls.return_value
 
     meta = fetch_meta("https://youtu.be/abc")
@@ -269,9 +266,7 @@ def test_fetch_captions_returns_text_when_present(mock_ytdl_class):
         "00:00:02.000 --> 00:00:04.000\n"
         "Second line\n"
     )
-    mock_ytdl_class.side_effect = _ytdl_with_side_effect_writing_files(
-        {"abc.en.vtt": vtt}
-    )
+    mock_ytdl_class.side_effect = _ytdl_with_side_effect_writing_files({"abc.en.vtt": vtt})
 
     text = fetch_captions("https://youtu.be/abc", lang="en")
 
@@ -309,9 +304,7 @@ def test_fetch_captions_uses_requested_lang(mock_ytdl_class):
 def test_fetch_captions_handles_auto_suffix(mock_ytdl_class):
     """yt-dlp writes auto-captions as `<id>.<lang>-auto.vtt` — must match."""
     vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nAuto text\n"
-    mock_ytdl_class.side_effect = _ytdl_with_side_effect_writing_files(
-        {"abc.en-auto.vtt": vtt}
-    )
+    mock_ytdl_class.side_effect = _ytdl_with_side_effect_writing_files({"abc.en-auto.vtt": vtt})
 
     text = fetch_captions("https://youtu.be/abc", lang="en")
 
@@ -322,9 +315,7 @@ def test_fetch_captions_handles_auto_suffix(mock_ytdl_class):
 def test_fetch_captions_handles_orig_suffix(mock_ytdl_class):
     """yt-dlp may suffix with `-orig` when normalizing (e.g. en-US → en)."""
     vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nOriginal text\n"
-    mock_ytdl_class.side_effect = _ytdl_with_side_effect_writing_files(
-        {"abc.en-orig.vtt": vtt}
-    )
+    mock_ytdl_class.side_effect = _ytdl_with_side_effect_writing_files({"abc.en-orig.vtt": vtt})
 
     text = fetch_captions("https://youtu.be/abc", lang="en")
 
@@ -550,15 +541,7 @@ def test_parse_vtt_header_only_returns_empty_string():
 
 
 def test_parse_vtt_strips_timestamps_and_returns_text():
-    vtt = (
-        "WEBVTT\n"
-        "\n"
-        "00:00:00.000 --> 00:00:02.000\n"
-        "Hello\n"
-        "\n"
-        "00:00:02.000 --> 00:00:04.000\n"
-        "World\n"
-    )
+    vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n\n00:00:02.000 --> 00:00:04.000\nWorld\n"
     assert _parse_vtt(vtt) == "Hello\nWorld"
 
 
@@ -578,23 +561,12 @@ def test_parse_vtt_strips_cue_numbers():
 
 
 def test_parse_vtt_strips_inline_tags():
-    vtt = (
-        "WEBVTT\n"
-        "\n"
-        "00:00:00.000 --> 00:00:02.000\n"
-        "<c.color>Hello</c> <00:00:00.500>world\n"
-    )
+    vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n<c.color>Hello</c> <00:00:00.500>world\n"
     assert _parse_vtt(vtt) == "Hello world"
 
 
 def test_parse_vtt_strips_notes():
-    vtt = (
-        "WEBVTT\n"
-        "\n"
-        "NOTE this is a note\n"
-        "00:00:00.000 --> 00:00:02.000\n"
-        "Real text\n"
-    )
+    vtt = "WEBVTT\n\nNOTE this is a note\n00:00:00.000 --> 00:00:02.000\nReal text\n"
     assert _parse_vtt(vtt) == "Real text"
 
 
@@ -609,13 +581,8 @@ def test_parse_vtt_strips_bom():
 
 def test_parse_vtt_unescapes_html_entities():
     """YouTube auto-captions emit `&amp;`, `&#39;`, `&quot;` — must unescape."""
-    vtt = (
-        "WEBVTT\n"
-        "\n"
-        "00:00:00.000 --> 00:00:02.000\n"
-        "Tom &amp; Jerry &#39;s &quot;adventures&quot;\n"
-    )
-    assert _parse_vtt(vtt) == "Tom & Jerry 's \"adventures\""
+    vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nTom &amp; Jerry &#39;s &quot;adventures&quot;\n"
+    assert _parse_vtt(vtt) == 'Tom & Jerry \'s "adventures"'
 
 
 def test_parse_vtt_dedupes_rolling_window_cues():
