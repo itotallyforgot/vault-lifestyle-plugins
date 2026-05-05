@@ -1,0 +1,51 @@
+[project]
+name = "vault-yt"
+version = "0.1.0"
+description = "On-demand YouTube transcript ingester for markdown-vault vaults — first plug-in in the vault-lifestyle-plugins family."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "vault-lifestyle-plugins contributors" }]
+dependencies = [
+    "yt-dlp>=2024.1.0",
+    "pydantic>=2.0",
+    "typer>=0.12",
+    "vault-lifestyle-plugins-lib",
+]
+
+[project.optional-dependencies]
+whisper = [
+    "openai-whisper>=20231117",
+]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+]
+
+[project.scripts]
+vault-yt = "vault_yt.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+# Path dep on the umbrella's lib/ — siblings consume the shared frontmatter
+# schema + vault resolver via this path link, not a published package.
+vault-lifestyle-plugins-lib = { path = "../lib", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "network: tests that hit YouTube over the network (skipped by default)",
+    "whisper: tests that require a downloaded Whisper model",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src", "../lib"]
+pythonVersion = "3.12"
