@@ -1,0 +1,185 @@
+{
+  "additionalProperties": true,
+  "description": "Frontmatter contract for files newly written under `<vault>/raw/`.",
+  "properties": {
+    "source_url": {
+      "description": "Source URL. Must start with http:// or https://.",
+      "minLength": 1,
+      "pattern": "^https?://",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "clipped_at": {
+      "description": "ISO-8601 timestamp WITH timezone (e.g., 2026-05-05T12:00:00Z).",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2})$",
+      "title": "Clipped At",
+      "type": "string"
+    },
+    "ingested": {
+      "const": false,
+      "description": "Must be explicitly set to False on initial write. /vault ingest flips this to True after consuming the file. Required, no default.",
+      "title": "Ingested",
+      "type": "boolean"
+    },
+    "source_kind": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Kind"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "channel": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Channel"
+    },
+    "channel_url": {
+      "anyOf": [
+        {
+          "pattern": "^https?://",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Source channel/feed URL. Must start with http:// or https:// if present.",
+      "title": "Channel Url"
+    },
+    "author": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Author"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2}))?$",
+      "title": "Published At"
+    },
+    "duration_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Seconds"
+    },
+    "transcript_source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Transcript Source"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "tags": {
+      "description": "Strict list of strings. None or bare-string inputs are rejected \u2014 Node siblings emitting `tags: \"youtube\"` (Obsidian shorthand) must wrap as `[\"youtube\"]` to match the JSON schema.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "ingested_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2})$",
+      "title": "Ingested At"
+    },
+    "wiki_page": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wiki Page"
+    }
+  },
+  "required": [
+    "source_url",
+    "clipped_at",
+    "ingested"
+  ],
+  "title": "second-brain raw/ frontmatter contract",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
