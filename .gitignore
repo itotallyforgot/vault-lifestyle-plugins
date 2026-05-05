@@ -1,0 +1,44 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Node (for future integrations)
+node_modules/
+.npm/
+.yarn/
+
+# Project state — never commit
+*.db
+*.db-journal
+*.pkl
+.cache/
+
+# Whisper / model cache
+.whisper-cache/
+~/.cache/whisper/
+
+# OAuth tokens — never ever commit
+*token*.json
+.tokens/
+credentials*.json
+client_secret*.json
+
+# Worktrees (used by ogre:execute)
+.worktrees/
+
+# Per-integration local config
+*/local-config.toml
+*/config.local.toml
