@@ -119,6 +119,61 @@ def test_fetch_meta_dedupes_caption_langs(mock_ytdl_class):
     assert meta["captions"] == ["en", "fr"]
 
 
+# ----- caption_kinds (manual-vs-auto per-lang map; resolver consumer) -----
+
+
+@patch("vault_yt.extractor.YoutubeDL")
+def test_fetch_meta_caption_kinds_manual_only(mock_ytdl_class):
+    cls, _ = _ytdl_mock(
+        {"id": "abc", "title": "T", "subtitles": {"en": [{}]}}
+    )
+    mock_ytdl_class.return_value = cls.return_value
+
+    meta = fetch_meta("https://youtu.be/abc")
+
+    assert meta["caption_kinds"] == {"en": "manual"}
+
+
+@patch("vault_yt.extractor.YoutubeDL")
+def test_fetch_meta_caption_kinds_auto_only(mock_ytdl_class):
+    cls, _ = _ytdl_mock(
+        {"id": "abc", "title": "T", "automatic_captions": {"en": [{}]}}
+    )
+    mock_ytdl_class.return_value = cls.return_value
+
+    meta = fetch_meta("https://youtu.be/abc")
+
+    assert meta["caption_kinds"] == {"en": "auto"}
+
+
+@patch("vault_yt.extractor.YoutubeDL")
+def test_fetch_meta_caption_kinds_manual_wins_over_auto(mock_ytdl_class):
+    """When the same lang has both manual and auto, manual wins."""
+    cls, _ = _ytdl_mock(
+        {
+            "id": "abc",
+            "title": "T",
+            "subtitles": {"en": [{}]},
+            "automatic_captions": {"en": [{}], "fr": [{}]},
+        }
+    )
+    mock_ytdl_class.return_value = cls.return_value
+
+    meta = fetch_meta("https://youtu.be/abc")
+
+    assert meta["caption_kinds"] == {"en": "manual", "fr": "auto"}
+
+
+@patch("vault_yt.extractor.YoutubeDL")
+def test_fetch_meta_caption_kinds_empty_when_no_captions(mock_ytdl_class):
+    cls, _ = _ytdl_mock({"id": "abc", "title": "T"})
+    mock_ytdl_class.return_value = cls.return_value
+
+    meta = fetch_meta("https://youtu.be/abc")
+
+    assert meta["caption_kinds"] == {}
+
+
 @patch("vault_yt.extractor.YoutubeDL")
 def test_fetch_meta_returns_published_at_as_date_object(mock_ytdl_class):
     """published_at is a `datetime.date`, not a string — keeps the type contract
