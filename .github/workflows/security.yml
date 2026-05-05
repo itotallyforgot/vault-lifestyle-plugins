@@ -16,7 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Scorecard's checkout step fails with "Repository not found" on private
+  # repos — the default GITHUB_TOKEN can't reach the cross-org Scorecard
+  # service. Gate on visibility=public until OGR-16 flips this repo public.
   scorecard:
+    if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
