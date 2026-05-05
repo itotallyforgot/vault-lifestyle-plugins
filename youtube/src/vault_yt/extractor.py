@@ -65,6 +65,7 @@ def fetch_meta(url: str) -> dict[str, Any]:
     - `published_at`: `datetime.date` derived from yt-dlp's `upload_date` (`YYYYMMDD`); None if absent or malformed.
     - `duration_seconds`: int seconds; None if absent.
     - `captions`: sorted list[str] of available subtitle language codes (manual + auto-generated, deduped).
+    - `caption_kinds`: dict[lang, "manual" | "auto"]. Manual wins when both exist for the same language. Used by `resolver` to skip a second yt-dlp round-trip.
 
     Raises:
         ExtractorError(kind="network"): yt-dlp's extract_info raised.
@@ -90,6 +91,12 @@ def fetch_meta(url: str) -> dict[str, Any]:
     manual_langs = set((info.get("subtitles") or {}).keys())
     auto_langs = set((info.get("automatic_captions") or {}).keys())
     captions = sorted(manual_langs | auto_langs)
+    # Per-language source. Build auto-first then overlay manual so the
+    # manual-wins invariant is reorder-safe — flipping the order of these
+    # two statements still yields manual-wins. Used by
+    # `resolver.choose_transcript_source` to avoid a second yt-dlp round-trip.
+    caption_kinds: dict[str, str] = {lang: "auto" for lang in auto_langs}
+    caption_kinds.update({lang: "manual" for lang in manual_langs})
 
     upload_date = info.get("upload_date")
     published_at: date | None = None
@@ -109,6 +116,7 @@ def fetch_meta(url: str) -> dict[str, Any]:
         "published_at": published_at,
         "duration_seconds": info.get("duration"),
         "captions": captions,
+        "caption_kinds": caption_kinds,
     }
 
 
