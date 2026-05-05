@@ -32,7 +32,9 @@ def _make_audio(tmp_path: Path) -> Path:
     return audio
 
 
-def _install_fake_whisper(monkeypatch: pytest.MonkeyPatch, transcribe_text: str = "hello") -> MagicMock:
+def _install_fake_whisper(
+    monkeypatch: pytest.MonkeyPatch, transcribe_text: str = "hello"
+) -> MagicMock:
     """Inject a fake `whisper` module into sys.modules, return the model mock."""
     fake_whisper = MagicMock()
     fake_model = MagicMock()
@@ -111,9 +113,7 @@ def test_whisper_unavailable_raises_on_import_error(
         transcribe_audio(audio)
 
 
-def test_whisper_unavailable_raises_on_oserror(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_whisper_unavailable_raises_on_oserror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Real-world: torch/cudnn dlopen failures raise OSError, not ImportError.
     Treat them the same — whisper effectively unavailable from the CLI's view."""
     audio = _make_audio(tmp_path)
@@ -139,9 +139,7 @@ def test_transcribe_uses_default_model_when_unspecified(
     fake_whisper.load_model.assert_called_once_with(DEFAULT_MODEL)
 
 
-def test_transcribe_passes_explicit_model(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_transcribe_passes_explicit_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     audio = _make_audio(tmp_path)
     fake_whisper = _install_fake_whisper(monkeypatch)
 
@@ -150,9 +148,7 @@ def test_transcribe_passes_explicit_model(
     fake_whisper.load_model.assert_called_once_with("small")
 
 
-def test_transcribe_returns_stripped_text(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_transcribe_returns_stripped_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     audio = _make_audio(tmp_path)
     _install_fake_whisper(monkeypatch, "  hello world  \n")
 
@@ -191,9 +187,7 @@ def test_transcribe_returns_empty_string_when_text_not_str(
     assert result == ""
 
 
-def test_transcribe_passes_language_hint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_transcribe_passes_language_hint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     audio = _make_audio(tmp_path)
     fake_whisper = _install_fake_whisper(monkeypatch)
     fake_model = fake_whisper.load_model.return_value

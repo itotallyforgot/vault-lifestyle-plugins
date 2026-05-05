@@ -8,6 +8,7 @@ collision-aware write.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -112,9 +113,7 @@ def write(path: Path, content: str, force: bool = False) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if path.exists() and not force:
-        raise FileExistsError(
-            f"raw/<slug>.md already exists at {path} — pass --force to overwrite"
-        )
+        raise FileExistsError(f"raw/<slug>.md already exists at {path} — pass --force to overwrite")
 
     # Atomic write: temp file in the same directory, then rename. Same
     # directory matters because rename is only atomic on the same FS.
@@ -127,10 +126,8 @@ def write(path: Path, content: str, force: bool = False) -> Path:
         tmp_path.replace(path)
     except BaseException:
         # Clean up temp file on any failure (including KeyboardInterrupt).
-        try:
+        with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
-        except FileNotFoundError:
-            pass
         raise
 
     return path
