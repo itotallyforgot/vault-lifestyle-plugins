@@ -1,6 +1,6 @@
 # vault-lifestyle-plugins
 
-Lifestyle integration plug-ins for [markdown-vault](https://github.com/itotallyforgot/markdown-vault) — automate ingestion of insights from daily-use services and (later) act on toil for you.
+Lifestyle integration plug-ins for [markdown-vault](https://github.com/itotallyforgot/markdown-vault): automate ingestion of insights from daily-use services and later act on toil for you.
 
 ## What this is
 
@@ -16,7 +16,7 @@ A monorepo of independently-shippable plug-ins that overlay onto a markdown-vaul
 
 | Plug-in | Direction | Runtime | Status |
 |---|---|---|---|
-| `youtube/` | Ingest (transcript) | Python | **MVP in progress** — on-demand CLI tracer |
+| `youtube/` | Ingest (transcript) | Python | **MVP in progress:** on-demand CLI tracer |
 | `spotify/` | Ingest (listening history) | Python | Planned |
 | `gmail/` | Action (spam triage, label) | TBD (Python or Node) | Planned |
 | `calendar/` | Action (event management) | TBD | Planned |
@@ -27,13 +27,13 @@ A monorepo of independently-shippable plug-ins that overlay onto a markdown-vaul
 
 - **Plug-in for a standalone vault.** markdown-vault depends on no plug-ins; this repo overlays onto a target vault when installed. The vault works without us; we add capability.
 - **Per-integration runtime freedom.** YouTube uses Python (yt-dlp). A future Gmail agent might use Node (better SDK). Each subdir picks its own toolchain.
-- **Output convention.** Every ingest plug-in writes `raw/<YYYY-MM-DD>-<slug>.md` with frontmatter compatible with markdown-vault's `/vault ingest` skill (`ingested: false`, `clipped_at`, source URL field, etc.). The shared `lib/vault_write/` codifies the contract.
-- **No vault writes outside `raw/`.** Plug-ins ingest sources; the vault's own `/vault ingest` skill is the only writer for `wiki/`. Action-direction plug-ins (email, calendar) DO NOT touch the vault — they act on external services.
+- **Output convention.** Every ingest plug-in writes a vault-compatible file under `raw/` with frontmatter compatible with markdown-vault's `/vault ingest` skill (`ingested: false`, `clipped_at`, source URL field, etc.). The shared `lib/` package codifies the contract.
+- **No vault writes outside `raw/`.** Plug-ins ingest sources; the vault's own `/vault ingest` skill is the only writer for `wiki/`. Action-direction plug-ins (email, calendar) DO NOT touch the vault; they act on external services.
 - **Auth handled per integration.** Public sources (YouTube videos, RSS) need none. Personal data (Spotify history, Gmail) goes through OAuth via the integration's local config. No central auth broker; each plug-in owns its own credentials.
 
 ## Install
 
-Pick the integrations you want. Each has its own install / config story documented in its subdirectory's README. The umbrella has no top-level install — just `git clone` to get the source.
+Pick the integrations you want. Each has its own install / config story documented in its subdirectory's README. The umbrella has no top-level install; just `git clone` to get the source.
 
 ## Architecture
 
@@ -55,7 +55,7 @@ vault-lifestyle-plugins/
 
 Each integration is independently:
 
-- Runnable (`python -m vault_youtube <url>`)
+- Runnable (`uv --directory youtube run vault-yt <url>`)
 - Versioned (its own `pyproject.toml` / `package.json`)
 - Documented (its own README with install + use)
 - Tested (its own test suite under `youtube/tests/`)
@@ -64,7 +64,7 @@ Each integration is independently:
 
 Companion to:
 
-- [markdown-vault](https://github.com/itotallyforgot/markdown-vault) — the standalone vault this overlays onto.
-- [vault-retrieval-engine](https://github.com/itotallyforgot/vault-retrieval-engine) — sister plug-in that adds local retrieval (graph + vector). Independent install.
+- [markdown-vault](https://github.com/itotallyforgot/markdown-vault): the standalone vault this overlays onto.
+- [vault-retrieval-engine](https://github.com/itotallyforgot/vault-retrieval-engine): sister plug-in that adds local retrieval (graph + vector). Independent install.
 
 Per `markdown-vault/internal-notes`, this repo is one of the optional plug-ins layered on top of the standalone vault.

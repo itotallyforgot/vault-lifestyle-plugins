@@ -22,7 +22,7 @@ import re
 import tempfile
 from datetime import date
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from yt_dlp import YoutubeDL  # type: ignore[import-untyped]
 
@@ -77,7 +77,7 @@ def fetch_meta(url: str) -> dict[str, Any]:
     """
     opts = {"quiet": True, "no_warnings": True, "skip_download": True}
     try:
-        with YoutubeDL(opts) as ydl:
+        with YoutubeDL(cast(Any, opts)) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as e:
         raise ExtractorError("network", f"yt-dlp failed for {url}: {e}") from e
@@ -151,7 +151,7 @@ def fetch_captions(url: str, lang: str = "en") -> str | None:
             "outtmpl": str(td_path / "%(id)s.%(ext)s"),
         }
         try:
-            with YoutubeDL(opts) as ydl:
+            with YoutubeDL(cast(Any, opts)) as ydl:
                 ydl.extract_info(url, download=True)
         except Exception as e:
             raise ExtractorError("network", f"caption fetch failed for {url}: {e}") from e
@@ -202,7 +202,7 @@ def download_audio(url: str, dest_dir: Path) -> Path:
         "match_filter": _duration_filter,
     }
     try:
-        with YoutubeDL(opts) as ydl:
+        with YoutubeDL(cast(Any, opts)) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as e:
         raise ExtractorError("network", f"audio download failed for {url}: {e}") from e
