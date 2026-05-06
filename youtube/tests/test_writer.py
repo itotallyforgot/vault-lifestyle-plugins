@@ -14,7 +14,6 @@ from vault_yt.writer import (
     write,
 )
 
-
 # ---------- fixtures ----------
 
 

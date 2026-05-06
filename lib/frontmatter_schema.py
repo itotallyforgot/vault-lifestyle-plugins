@@ -24,14 +24,10 @@ from pydantic import (
 # under jsonschema's Draft202012Validator unless a FormatChecker is wired up,
 # so siblings (Node, Go, etc.) get a pattern too.
 _URL_PATTERN = r"^https?://"
-_DATETIME_TZ_PATTERN = (
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$"
-)
+_DATETIME_TZ_PATTERN = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$"
 # Date-only OR full datetime with timezone. Used for fields where YouTube et al
 # typically emit just a date, but a full timestamp is also acceptable.
-_DATE_OR_DATETIME_PATTERN = (
-    r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2}))?$"
-)
+_DATE_OR_DATETIME_PATTERN = r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2}))?$"
 
 
 class Frontmatter(BaseModel):
@@ -77,8 +73,8 @@ class Frontmatter(BaseModel):
         default_factory=list,
         description=(
             "Strict list of strings. None or bare-string inputs are rejected — "
-            "Node siblings emitting `tags: \"youtube\"` (Obsidian shorthand) must "
-            "wrap as `[\"youtube\"]` to match the JSON schema."
+            'Node siblings emitting `tags: "youtube"` (Obsidian shorthand) must '
+            'wrap as `["youtube"]` to match the JSON schema.'
         ),
     )
 
