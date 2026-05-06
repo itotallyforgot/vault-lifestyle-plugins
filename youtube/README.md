@@ -1,34 +1,128 @@
-# vault-yt — YouTube transcript ingester
+# vault-yt: YouTube Transcript Ingester
 
-On-demand CLI that takes a YouTube URL, fetches a transcript (captions
-first, Whisper fallback), and deposits a vault-compatible
-`raw/<slug>.md` for the unchanged `/vault ingest` skill to consume.
+`vault-yt` takes a YouTube URL, gets a transcript, and writes one
+vault-compatible file under `<vault>/raw/`. The existing `/vault ingest`
+flow picks that raw file up later.
 
-> **MVP — Slice 2 of 6.** This README is a stub. Full install + usage
-> docs land in Slice 5 (OGR-9) when the CLI is wired up. Today the
-> package ships only the `extractor` module — the yt-dlp wrapper that
-> later slices build on.
+The package prefers yt-dlp captions. When captions are unavailable or
+empty, it falls back to local Whisper. Use `--force-whisper` to skip
+captions.
 
-## Status
+## Install
 
-| Slice | Module | Issue | Status |
-|---|---|---|---|
-| 2 | `extractor` (yt-dlp meta + captions + audio download) | OGR-6 | **this slice** |
-| 3 | `whisper_fallback` + `resolver` | OGR-7 | next |
-| 4 | `slug` + `writer` | OGR-8 | follows |
-| 5 | `cli` + idempotency | OGR-9 | follows |
-| 6 | CI + standards via `ogre:repo` | OGR-10 | follows |
+From the repo root, with uv:
 
-## What's importable today
-
-```python
-from vault_yt.extractor import (
-    ExtractorError,
-    fetch_meta,        # url → metadata dict (id, title, channel, captions, ...)
-    fetch_captions,    # url, lang → plain transcript text or None
-    download_audio,    # url, dest_dir → Path to audio file (Whisper input)
-)
+```bash
+uv --directory youtube sync --extra whisper
+uv --directory youtube run vault-yt --help
 ```
 
-See `src/vault_yt/extractor.py` for signatures and
-`tests/test_extractor.py` for usage examples.
+For captions-only use:
+
+```bash
+uv --directory youtube sync
+uv --directory youtube run vault-yt --help
+```
+
+With pip in an active virtual environment:
+
+```bash
+pip install -e ./lib -e "./youtube[whisper]"
+```
+
+Omit `[whisper]` for captions-only installs.
+
+## Use
+
+Pass the vault path explicitly:
+
+```bash
+uv --directory youtube run vault-yt "https://youtu.be/<id>" --vault /path/to/Second-Brain
+```
+
+Or set `VAULT_PATH`:
+
+```bash
+export VAULT_PATH=/path/to/Second-Brain
+uv --directory youtube run vault-yt "https://youtu.be/<id>"
+```
+
+The CLI writes:
+
+```text
+<vault>/raw/<youtube-id>-<sanitized-title>.md
+```
+
+Re-running the same URL is idempotent. If the matching raw file already
+exists, the command prints `existing: <path>` and exits without rewriting.
+Use `--force` to overwrite.
+
+## Flags
+
+```text
+vault-yt URL
+  --vault PATH
+  --force
+  --force-whisper
+  --whisper-model tiny|base|small
+  --verbose
+  --dry-run
+```
+
+`--whisper-model` defaults to `VAULT_YT_WHISPER_MODEL`, then `base`.
+Models larger than `small` are rejected by design.
+
+`--dry-run` resolves the vault, fetches the transcript, builds the raw
+content, and prints the target path plus the start of the file without
+writing.
+
+## Output
+
+The generated frontmatter includes the fields the vault expects:
+
+```yaml
+source_url: "https://youtu.be/<id>"
+source_kind: youtube
+clipped_at: "YYYY-MM-DDTHH:MM:SSZ"
+transcript_source: yt-dlp
+ingested: false
+ingested_at: null
+wiki_page: null
+tags: [youtube]
+```
+
+Whisper output uses `transcript_source: whisper-base`,
+`whisper-tiny`, or `whisper-small`.
+
+## Exit Codes
+
+| Code | Meaning |
+|---:|---|
+| 0 | Success, dry run, or idempotent no-op |
+| 2 | Malformed URL |
+| 3 | Vault path could not be resolved |
+| 4 | `<vault>/raw/` is missing or not writable |
+| 5 | yt-dlp extraction failed after one retry for network failures |
+| 6 | Whisper is needed but unavailable |
+| 7 | Whisper model load or transcription failed |
+| 8 | Final transcript is empty |
+| 9 | Slug collision with a different `source_url` |
+| 10 | Generated frontmatter failed validation |
+
+## Troubleshooting
+
+No captions and no Whisper:
+
+```bash
+uv --directory youtube sync --extra whisper
+```
+
+Whisper model download is slow on a new machine. After the model is
+cached, later runs reuse the local cache.
+
+VRAM pressure on a gaming PC: keep the default `base` model, or use
+`--whisper-model tiny`. The CLI will not run `medium` or larger models.
+
+Mac to PC flow: run `vault-yt` on the Mac against the local synced vault.
+Obsidian Sync can move the raw file to the PC. The vault's own ingest and
+indexing flow stays separate.

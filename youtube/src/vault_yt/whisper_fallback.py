@@ -1,8 +1,8 @@
-"""Local Whisper transcription — fallback when YouTube captions are absent.
+"""Local Whisper transcription: fallback when YouTube captions are absent.
 
 Lazy-imports `openai-whisper` (the optional `[whisper]` extra). When the
 extra isn't installed, raises `WhisperUnavailableError` instead of crashing
-the import of this module — keeps the rest of `vault_yt` importable on
+the import of this module; keeps the rest of `vault_yt` importable on
 captions-only installs.
 
 Failure modes use a `kind`-discriminator pattern matching `extractor.ExtractorError`,
@@ -14,8 +14,8 @@ so the CLI (Slice 5 / OGR-9) can map cleanly to the spec's exit codes:
 | 7         | whisper model download/load failed    | WhisperTranscriptionError(kind="model_load")    |
 | 7         | transcribe call raised at runtime     | WhisperTranscriptionError(kind="transcribe")    |
 | 8         | transcript empty                      | (returned as `""`; CLI maps empty → exit 8)     |
-| —         | requested model exceeds spec cap      | WhisperModelTooLargeError                       |
-| —         | audio file missing                    | FileNotFoundError                               |
+| n/a       | requested model exceeds spec cap      | WhisperModelTooLargeError                       |
+| n/a       | audio file missing                    | FileNotFoundError                               |
 """
 
 from __future__ import annotations
@@ -72,6 +72,7 @@ def transcribe_audio(
     *,
     model: str = DEFAULT_MODEL,
     language: str | None = None,
+    verbose: bool = False,
 ) -> str:
     """Transcribe `audio_path` via local Whisper. Returns plain text.
 
@@ -82,7 +83,7 @@ def transcribe_audio(
             Capped at `"small"` per spec (absolute cap; no user override).
             Raises `WhisperModelTooLargeError` for anything larger.
         language: ISO 639-1 hint to skip Whisper's auto-detect. None = auto.
-            TODO(slice 5 / OGR-9): wire `--language` CLI flag through.
+        verbose: pass through to Whisper's transcribe call.
 
     Returns:
         Transcript text, stripped. Empty string when whisper produces no text
@@ -104,7 +105,7 @@ def transcribe_audio(
     if not audio_path.is_file():
         raise FileNotFoundError(f"audio file does not exist: {audio_path}")
 
-    # Lazy import — keeps the module importable when [whisper] extra is
+    # Lazy import keeps the module importable when [whisper] extra is
     # absent. Catch both ImportError (missing package) and OSError
     # (missing native deps like libcudnn) since either makes whisper
     # effectively unavailable from the CLI's perspective (spec exit 6).
@@ -129,7 +130,7 @@ def transcribe_audio(
         result = whisper_model.transcribe(
             str(audio_path),
             language=language,
-            verbose=False,
+            verbose=verbose,
         )
     except Exception as e:
         raise WhisperTranscriptionError(

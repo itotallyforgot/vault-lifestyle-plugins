@@ -117,6 +117,11 @@ def test_whisper_transcript_source_accepted() -> None:
     assert "transcript_source: whisper-base" in md
 
 
+def test_whisper_tiny_transcript_source_accepted() -> None:
+    md = build_raw_md(_meta(), "body", transcript_source="whisper-tiny")
+    assert "transcript_source: whisper-tiny" in md
+
+
 def test_invalid_transcript_source_rejected() -> None:
     with pytest.raises((ValueError, WriterError)):
         build_raw_md(_meta(), "body", transcript_source="not-a-real-source")
