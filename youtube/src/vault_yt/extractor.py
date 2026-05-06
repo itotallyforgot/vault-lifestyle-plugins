@@ -62,10 +62,14 @@ def fetch_meta(url: str) -> dict[str, Any]:
     - `id`: YouTube video ID (validated non-empty).
     - `title`: video title (validated non-empty).
     - `channel`, `channel_url`: channel info (falls back to `uploader`/`uploader_url`); may be None.
-    - `published_at`: `datetime.date` derived from yt-dlp's `upload_date` (`YYYYMMDD`); None if absent or malformed.
+    - `published_at`: `datetime.date` derived from yt-dlp's `upload_date`
+      (`YYYYMMDD`); None if absent or malformed.
     - `duration_seconds`: int seconds; None if absent.
-    - `captions`: sorted list[str] of available subtitle language codes (manual + auto-generated, deduped).
-    - `caption_kinds`: dict[lang, "manual" | "auto"]. Manual wins when both exist for the same language. Used by `resolver` to skip a second yt-dlp round-trip.
+    - `captions`: sorted list[str] of available subtitle language codes
+      (manual + auto-generated, deduped).
+    - `caption_kinds`: dict[lang, "manual" | "auto"]. Manual wins when both
+      exist for the same language. Used by `resolver` to skip a second
+      yt-dlp round-trip.
 
     Raises:
         ExtractorError(kind="network"): yt-dlp's extract_info raised.
@@ -150,9 +154,7 @@ def fetch_captions(url: str, lang: str = "en") -> str | None:
             with YoutubeDL(opts) as ydl:
                 ydl.extract_info(url, download=True)
         except Exception as e:
-            raise ExtractorError(
-                "network", f"caption fetch failed for {url}: {e}"
-            ) from e
+            raise ExtractorError("network", f"caption fetch failed for {url}: {e}") from e
 
         # Match all real-world shapes: bare, `-auto`, `-orig`, etc.
         candidates = sorted(td_path.glob(f"*.{lang}*.vtt"))

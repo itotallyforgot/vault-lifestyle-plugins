@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from vault_yt.resolver import choose_transcript_source
 
-
 # ---------- happy paths ----------
 
 
@@ -35,16 +34,12 @@ def test_lang_not_present_returns_whisper():
 
 def test_force_whisper_overrides_captions():
     meta = {"captions": ["en"], "caption_kinds": {"en": "manual"}}
-    assert (
-        choose_transcript_source(meta, lang="en", force_whisper=True) == "whisper"
-    )
+    assert choose_transcript_source(meta, lang="en", force_whisper=True) == "whisper"
 
 
 def test_force_whisper_with_no_captions_returns_whisper():
     meta = {"captions": [], "caption_kinds": {}}
-    assert (
-        choose_transcript_source(meta, lang="en", force_whisper=True) == "whisper"
-    )
+    assert choose_transcript_source(meta, lang="en", force_whisper=True) == "whisper"
 
 
 # ---------- legacy meta shape (no caption_kinds) ----------

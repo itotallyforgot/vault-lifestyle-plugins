@@ -6,7 +6,6 @@ import pytest
 
 from vault_yt.slug import make
 
-
 # ---------- determinism ----------
 
 
