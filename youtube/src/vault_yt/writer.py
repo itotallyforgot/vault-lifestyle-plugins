@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -18,10 +19,11 @@ from typing import Any, Literal
 import yaml
 from frontmatter_schema import validate_frontmatter
 
-TranscriptSource = Literal["yt-dlp", "whisper-base", "whisper-small"]
+TranscriptSource = Literal["yt-dlp", "whisper-tiny", "whisper-base", "whisper-small"]
 
 _VALID_TRANSCRIPT_SOURCES: tuple[str, ...] = (
     "yt-dlp",
+    "whisper-tiny",
     "whisper-base",
     "whisper-small",
 )
@@ -32,7 +34,7 @@ class WriterError(RuntimeError):
 
 
 def build_raw_md(
-    meta: dict[str, Any],
+    meta: Mapping[str, Any],
     transcript: str,
     transcript_source: str,
     *,
@@ -47,8 +49,8 @@ def build_raw_md(
             None).
         transcript: Plain transcript text, already paragraph-broken by the
             extractor / whisper resolver. Written as-is to the body.
-        transcript_source: One of ``"yt-dlp"``, ``"whisper-base"``,
-            ``"whisper-small"``. Validated up-front.
+        transcript_source: One of ``"yt-dlp"``, ``"whisper-tiny"``,
+            ``"whisper-base"``, ``"whisper-small"``. Validated up-front.
         clipped_at: Override the current-time stamp — provided for
             deterministic tests. Defaults to ``datetime.now(UTC)``.
 
@@ -137,7 +139,7 @@ def write(path: Path, content: str, force: bool = False) -> Path:
 
 
 def _build_frontmatter_dict(
-    meta: dict[str, Any],
+    meta: Mapping[str, Any],
     *,
     transcript_source: str,
     clipped_at: datetime,

@@ -8,13 +8,14 @@ The CLI (Slice 5) then dispatches to `extractor.fetch_captions` or
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Literal
 
 TranscriptSource = Literal["captions", "whisper"]
 
 
 def choose_transcript_source(
-    meta: dict[str, Any],
+    meta: Mapping[str, Any],
     *,
     lang: str = "en",
     force_whisper: bool = False,
