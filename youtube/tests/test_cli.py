@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from vault_yt import cli as cli_module
 from vault_yt.extractor import ExtractorError
+from vault_yt.manifest import default_manifest_path, load_manifest
 from vault_yt.slug import make
 from vault_yt.whisper_fallback import WhisperUnavailableError
 
@@ -410,3 +411,149 @@ def test_verbose_flag_passes_through_to_whisper(tmp_path: Path, monkeypatch) -> 
 
     assert result.exit_code == 0
     assert seen["verbose"] is True
+
+
+def test_url_file_batch_processes_limited_items_and_writes_manifest(
+    tmp_path: Path, monkeypatch
+) -> None:
+    vault = _vault(tmp_path)
+    url_file = tmp_path / "urls.txt"
+    url_file.write_text(
+        "https://youtu.be/abc123\nhttps://youtu.be/def456\n",
+        encoding="utf-8",
+    )
+    metas = {
+        "https://youtu.be/abc123": _meta(id="abc123", title="Alpha"),
+        "https://youtu.be/def456": _meta(id="def456", title="Beta"),
+    }
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: metas[url])
+    monkeypatch.setattr(cli_module, "fetch_captions", lambda url, lang="en": f"caption for {url}")
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--url-file",
+            str(url_file),
+            "--limit",
+            "1",
+            "--run-id",
+            "run-123",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    manifest = load_manifest(default_manifest_path(vault, "run-123"))
+    assert result.exit_code == 0
+    assert "batch run: run-123" in result.output
+    assert "written: 1" in result.output
+    assert "pending: 1" in result.output
+    assert [item.video_id for item in manifest.items] == ["abc123", "def456"]
+    assert manifest.items[0].status == "raw_written"
+    assert manifest.items[0].title == "Alpha"
+    assert manifest.items[0].raw_path == "raw/2026-05-05-youtube-abc123-alpha.md"
+    assert manifest.items[1].status == "pending"
+    assert (vault / manifest.items[0].raw_path).exists()
+
+
+def test_batch_resume_skips_completed_manifest_items(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    url_file = tmp_path / "urls.txt"
+    url_file.write_text(
+        "https://youtu.be/abc123\nhttps://youtu.be/def456\n",
+        encoding="utf-8",
+    )
+    metas = {
+        "https://youtu.be/abc123": _meta(id="abc123", title="Alpha"),
+        "https://youtu.be/def456": _meta(id="def456", title="Beta"),
+    }
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: metas[url])
+    monkeypatch.setattr(cli_module, "fetch_captions", lambda url, lang="en": f"caption for {url}")
+
+    first = runner.invoke(
+        cli_module.app,
+        [
+            "--url-file",
+            str(url_file),
+            "--limit",
+            "1",
+            "--run-id",
+            "run-123",
+            "--vault",
+            str(vault),
+        ],
+    )
+    second = runner.invoke(
+        cli_module.app,
+        [
+            "--url-file",
+            str(url_file),
+            "--limit",
+            "1",
+            "--run-id",
+            "run-123",
+            "--resume",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    manifest = load_manifest(default_manifest_path(vault, "run-123"))
+    assert first.exit_code == 0
+    assert second.exit_code == 0
+    assert manifest.summary == {"raw_written": 2}
+    assert "written: 1" in second.output
+
+
+def test_batch_records_item_failure_and_continues(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    url_file = tmp_path / "urls.txt"
+    url_file.write_text(
+        "https://youtu.be/abc123\nhttps://youtu.be/def456\n",
+        encoding="utf-8",
+    )
+
+    def fetch_meta(url: str) -> dict[str, Any]:
+        if url.endswith("abc123"):
+            raise ExtractorError("network", "temporary badness")
+        return _meta(id="def456", title="Beta")
+
+    monkeypatch.setattr(cli_module, "fetch_meta", fetch_meta)
+    monkeypatch.setattr(cli_module, "fetch_captions", lambda url, lang="en": f"caption for {url}")
+    monkeypatch.setattr(cli_module.time, "sleep", lambda seconds: None)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--url-file",
+            str(url_file),
+            "--run-id",
+            "run-123",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    manifest = load_manifest(default_manifest_path(vault, "run-123"))
+    assert result.exit_code == 1
+    assert manifest.summary == {"failed": 1, "raw_written": 1}
+    assert manifest.items[0].status == "failed"
+    assert manifest.items[0].error is not None
+    assert manifest.items[0].error.retryable is True
+    assert manifest.items[1].status == "raw_written"
+
+
+def test_batch_dry_run_expands_inputs_without_processing(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    url_file = tmp_path / "urls.txt"
+    url_file.write_text("https://youtu.be/abc123\n", encoding="utf-8")
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: (_ for _ in ()).throw(AssertionError))
+
+    result = runner.invoke(
+        cli_module.app,
+        ["--url-file", str(url_file), "--dry-run", "--vault", str(vault)],
+    )
+
+    assert result.exit_code == 0
+    assert "would process: 1 videos" in result.output
+    assert not (vault / ".vault-lifestyle").exists()

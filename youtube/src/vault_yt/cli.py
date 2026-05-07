@@ -8,6 +8,7 @@ import tempfile
 import time
 import traceback
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, NoReturn, TypedDict, cast
@@ -19,6 +20,17 @@ from pydantic import ValidationError
 from vault_resolver import VaultPathError, resolve_vault_path
 
 from vault_yt.extractor import ExtractorError, download_audio, fetch_captions, fetch_meta
+from vault_yt.inputs import InputExpansionError, WorkItem, expand_inputs
+from vault_yt.manifest import (
+    ManifestError,
+    ManifestItem,
+    WorkInput,
+    default_manifest_path,
+    load_manifest,
+    new_manifest,
+    save_manifest,
+    update_item_status,
+)
 from vault_yt.resolver import choose_transcript_source
 from vault_yt.slug import make
 from vault_yt.whisper_fallback import (
@@ -52,9 +64,24 @@ class VideoMeta(TypedDict):
     caption_kinds: dict[str, Literal["manual", "auto"]]
 
 
+@dataclass(frozen=True)
+class IngestOutcome:
+    """Result of processing one video URL."""
+
+    status: Literal["written", "existing", "dry_run"]
+    path: Path
+    source_url: str
+    title: str | None = None
+    transcript_source: str | None = None
+    transcript_language: str | None = None
+
+
 @app.command("vault-yt")
 def command(
-    url: Annotated[str, typer.Argument(help="YouTube URL to ingest.")],
+    url: Annotated[
+        str | None,
+        typer.Argument(help="YouTube URL to ingest."),
+    ] = None,
     vault: Annotated[
         Path | None,
         typer.Option("--vault", help="Target second-brain vault path."),
@@ -89,12 +116,29 @@ def command(
         bool,
         typer.Option("--dry-run", help="Run the pipeline but do not write."),
     ] = False,
+    url_file: Annotated[
+        Path | None,
+        typer.Option("--url-file", help="Text file containing one YouTube URL per line."),
+    ] = None,
+    playlist: Annotated[
+        str | None,
+        typer.Option("--playlist", help="YouTube playlist URL to ingest as a batch."),
+    ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option("--limit", min=1, help="Maximum pending videos to process this run."),
+    ] = None,
+    run_id: Annotated[
+        str | None,
+        typer.Option("--run-id", help="Stable staging run ID for batch/resume."),
+    ] = None,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", help="Resume an existing batch manifest."),
+    ] = False,
 ) -> None:
     """Fetch a transcript and write `<vault>/raw/<slug>.md`."""
     _configure_logging(verbose)
-
-    if not _looks_like_url(url):
-        _fail(2, f"malformed url: {url}")
 
     try:
         vault_path = resolve_vault_path(vault)
@@ -107,6 +151,53 @@ def command(
     if not os.access(raw_dir, os.W_OK):
         _fail(4, f"raw directory is not writable: {raw_dir}")
 
+    batch_inputs = _batch_inputs(url_file=url_file, playlist=playlist)
+    if batch_inputs:
+        _run_batch(
+            batch_inputs,
+            vault_path=vault_path,
+            force=force,
+            force_whisper=force_whisper,
+            whisper_model=whisper_model,
+            transcript_language=transcript_language,
+            verbose=verbose,
+            dry_run=dry_run,
+            limit=limit,
+            run_id=run_id,
+            resume=resume,
+        )
+        raise typer.Exit(0)
+
+    if url is None:
+        _fail(2, "missing url or batch input")
+
+    _ingest_url(
+        url,
+        vault_path=vault_path,
+        force=force,
+        force_whisper=force_whisper,
+        whisper_model=whisper_model,
+        transcript_language=transcript_language,
+        verbose=verbose,
+        dry_run=dry_run,
+    )
+
+
+def _ingest_url(
+    url: str,
+    *,
+    vault_path: Path,
+    force: bool,
+    force_whisper: bool,
+    whisper_model: str | None,
+    transcript_language: str,
+    verbose: bool,
+    dry_run: bool,
+) -> IngestOutcome:
+    if not _looks_like_url(url):
+        _fail(2, f"malformed url: {url}")
+
+    raw_dir = vault_path / "raw"
     model = whisper_model or os.environ.get("VAULT_YT_WHISPER_MODEL") or DEFAULT_MODEL
 
     try:
@@ -124,7 +215,12 @@ def command(
     if target.exists() and not force:
         if _existing_source_url(target) == source_url:
             typer.echo(f"existing: {target}")
-            raise typer.Exit(0)
+            return IngestOutcome(
+                status="existing",
+                path=target,
+                source_url=source_url,
+                title=meta["title"],
+            )
         _fail(9, f"collision: {target} already exists for a different source")
 
     try:
@@ -157,7 +253,14 @@ def command(
         typer.echo(f"would write: {target}")
         typer.echo("")
         typer.echo(_dry_run_preview(content))
-        raise typer.Exit(0)
+        return IngestOutcome(
+            status="dry_run",
+            path=target,
+            source_url=source_url,
+            title=meta["title"],
+            transcript_source=transcript_source,
+            transcript_language=transcript_language,
+        )
 
     try:
         written = write(target, content, force=force)
@@ -167,6 +270,124 @@ def command(
         _fail(4, f"raw write failed: {e}")
 
     typer.echo(f"written: {written}")
+    return IngestOutcome(
+        status="written",
+        path=written,
+        source_url=source_url,
+        title=meta["title"],
+        transcript_source=transcript_source,
+        transcript_language=transcript_language,
+    )
+
+
+def _run_batch(
+    inputs: list[str | Path],
+    *,
+    vault_path: Path,
+    force: bool,
+    force_whisper: bool,
+    whisper_model: str | None,
+    transcript_language: str,
+    verbose: bool,
+    dry_run: bool,
+    limit: int | None,
+    run_id: str | None,
+    resume: bool,
+) -> None:
+    try:
+        work_items = expand_inputs(inputs)
+    except InputExpansionError as e:
+        _fail(2, f"input expansion error: {e}")
+
+    selected_run_id = run_id or _default_run_id()
+    manifest_path = default_manifest_path(vault_path, selected_run_id)
+
+    if dry_run:
+        typer.echo(f"would process: {len(work_items)} videos")
+        typer.echo(f"would write manifest: {manifest_path}")
+        raise typer.Exit(0)
+
+    if resume and manifest_path.exists():
+        manifest = load_manifest(manifest_path)
+    else:
+        manifest = new_manifest(
+            run_id=selected_run_id,
+            vault_path=vault_path,
+            inputs=[_work_input(value) for value in inputs],
+            options={
+                "force": force,
+                "force_whisper": force_whisper,
+                "whisper_model": whisper_model,
+                "transcript_language": transcript_language,
+                "limit": limit,
+            },
+            items=[_manifest_item(index, item) for index, item in enumerate(work_items)],
+        )
+        save_manifest(manifest_path, manifest)
+
+    pending = [item for item in manifest.items if item.status == "pending"]
+    to_process = pending[:limit] if limit is not None else pending
+    written = 0
+    skipped = 0
+    failed = 0
+
+    for item in to_process:
+        manifest = update_item_status(manifest, item.video_id, "processing")
+        save_manifest(manifest_path, manifest)
+        try:
+            outcome = _ingest_url(
+                item.url,
+                vault_path=vault_path,
+                force=force,
+                force_whisper=force_whisper,
+                whisper_model=whisper_model,
+                transcript_language=transcript_language,
+                verbose=verbose,
+                dry_run=False,
+            )
+        except typer.Exit as e:
+            failed += 1
+            manifest = update_item_status(
+                manifest,
+                item.video_id,
+                "failed",
+                error=ManifestError(
+                    kind=f"exit_{e.exit_code}",
+                    message=f"vault-yt exited with code {e.exit_code}",
+                    retryable=e.exit_code == 5,
+                ),
+            )
+            save_manifest(manifest_path, manifest)
+            continue
+
+        status: Literal["raw_written", "skipped_existing"]
+        if outcome.status == "existing":
+            skipped += 1
+            status = "skipped_existing"
+        else:
+            written += 1
+            status = "raw_written"
+        manifest = update_item_status(
+            manifest,
+            item.video_id,
+            status,
+            title=outcome.title,
+            raw_path=str(outcome.path.relative_to(vault_path)),
+            transcript_source=outcome.transcript_source,
+            transcript_language=outcome.transcript_language,
+        )
+        save_manifest(manifest_path, manifest)
+
+    remaining = sum(1 for item in manifest.items if item.status == "pending")
+    typer.echo(f"batch run: {manifest.run_id}")
+    typer.echo(f"manifest: {manifest_path}")
+    typer.echo(f"written: {written}")
+    typer.echo(f"skipped_existing: {skipped}")
+    typer.echo(f"failed: {failed}")
+    typer.echo(f"pending: {remaining}")
+
+    if failed:
+        raise typer.Exit(1)
 
 
 def main() -> None:
@@ -275,6 +496,35 @@ def _existing_source_url(path: Path) -> str | None:
 
 def _source_url(video_id: str) -> str:
     return f"https://youtu.be/{video_id}"
+
+
+def _batch_inputs(*, url_file: Path | None, playlist: str | None) -> list[str | Path]:
+    values: list[str | Path] = []
+    if url_file is not None:
+        values.append(url_file)
+    if playlist is not None:
+        values.append(playlist)
+    return values
+
+
+def _work_input(value: str | Path) -> WorkInput:
+    if isinstance(value, Path):
+        return WorkInput(kind="url_file", ref=str(value))
+    return WorkInput(kind="playlist" if "list=" in value else "video", ref=value)
+
+
+def _manifest_item(position: int, item: WorkItem) -> ManifestItem:
+    return ManifestItem(
+        video_id=item.video_id,
+        url=item.url,
+        title=None,
+        position=position,
+        source_url=item.url,
+    )
+
+
+def _default_run_id() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H%M%SZ-youtube")
 
 
 def _slug_date(meta: VideoMeta) -> date:
