@@ -67,6 +67,17 @@ Re-running the same URL is idempotent. If the matching raw file already
 exists, the command prints `existing: <path>` and exits without rewriting.
 Use `--force` to overwrite.
 
+Bulk ingest runs use a staging manifest rather than writing directly to
+`wiki/`. The default manifest location is:
+
+```text
+<vault>/.vault-lifestyle/youtube/runs/<run-id>/manifest.json
+```
+
+The manifest records per-video status, raw file paths, transcript source,
+errors, and downstream finding/verification handoff state. The vault's own
+ingest flow remains responsible for accepting findings into `wiki/`.
+
 ## Flags
 
 ```text
@@ -78,6 +89,11 @@ vault-yt URL
   --transcript-language LANG
   --verbose
   --dry-run
+  --url-file PATH
+  --playlist URL
+  --limit N
+  --run-id ID
+  --resume
 ```
 
 `--whisper-model` defaults to `VAULT_YT_WHISPER_MODEL`, then `base`.
@@ -89,6 +105,18 @@ for caption selection and as the Whisper language hint.
 `--dry-run` resolves the vault, fetches the transcript, builds the raw
 content, and prints the target path plus the start of the file without
 writing.
+
+For batch parcels, omit the positional `URL` and pass `--url-file` or
+`--playlist`:
+
+```bash
+uv --directory youtube run vault-yt --url-file engineering.txt --limit 5 --vault /path/to/markdown-vault
+uv --directory youtube run vault-yt --playlist "https://www.youtube.com/playlist?list=<id>" --limit 3 --vault /path/to/markdown-vault
+```
+
+Use `--run-id` to make the staging manifest name stable and `--resume` to
+continue a previous run. `--dry-run` expands the inputs and prints how many
+videos would be processed without fetching transcripts or writing a manifest.
 
 ## Output
 

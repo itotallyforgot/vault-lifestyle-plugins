@@ -11,10 +11,14 @@ import pytest
 from vault_yt.extractor import (
     MAX_AUDIO_FILESIZE_BYTES,
     MAX_VIDEO_DURATION_SECONDS,
+    CaptionCue,
     ExtractorError,
     _duration_filter,
+    _format_cues_with_timestamps,
     _parse_vtt,
+    _parse_vtt_cues,
     download_audio,
+    fetch_caption_cues,
     fetch_captions,
     fetch_meta,
 )
@@ -417,6 +421,36 @@ def test_fetch_captions_raises_network_kind_on_yt_dlp_error(mock_ytdl_class):
     assert exc_info.value.kind == "network"
 
 
+@patch("vault_yt.extractor.YoutubeDL")
+def test_fetch_caption_cues_returns_cue_timestamps_and_text(mock_ytdl_class):
+    vtt = (
+        "WEBVTT\n"
+        "\n"
+        "00:00:00.000 --> 00:00:02.500\n"
+        "Hello <c>world</c>\n"
+        "\n"
+        "00:00:02.500 --> 00:00:04.000\n"
+        "Second &amp; line\n"
+    )
+    mock_ytdl_class.side_effect = _ytdl_with_side_effect_writing_files({"abc.en.vtt": vtt})
+
+    cues = fetch_caption_cues("https://youtu.be/abc", lang="en")
+
+    assert cues == [
+        CaptionCue(start="00:00:00.000", end="00:00:02.500", text="Hello world"),
+        CaptionCue(start="00:00:02.500", end="00:00:04.000", text="Second & line"),
+    ]
+
+
+@patch("vault_yt.extractor.YoutubeDL")
+def test_fetch_caption_cues_returns_none_when_absent(mock_ytdl_class):
+    mock_ytdl_class.side_effect = _ytdl_writing_no_vtt()
+
+    cues = fetch_caption_cues("https://youtu.be/no-captions", lang="en")
+
+    assert cues is None
+
+
 # ============================================================
 # download_audio
 # ============================================================
@@ -594,6 +628,34 @@ def test_parse_vtt_header_only_returns_empty_string():
 def test_parse_vtt_strips_timestamps_and_returns_text():
     vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n\n00:00:02.000 --> 00:00:04.000\nWorld\n"
     assert _parse_vtt(vtt) == "Hello\nWorld"
+
+
+def test_parse_vtt_cues_preserves_timestamps():
+    vtt = (
+        "WEBVTT\n"
+        "\n"
+        "1\n"
+        "00:00:00.000 --> 00:00:02.500 align:start position:0%\n"
+        "First line\n"
+        "\n"
+        "2\n"
+        "00:00:02.500 --> 00:00:04.000\n"
+        "Second line\n"
+    )
+
+    assert _parse_vtt_cues(vtt) == [
+        CaptionCue(start="00:00:00.000", end="00:00:02.500", text="First line"),
+        CaptionCue(start="00:00:02.500", end="00:00:04.000", text="Second line"),
+    ]
+
+
+def test_format_cues_with_timestamps_uses_readable_start_anchors():
+    cues = [
+        CaptionCue(start="00:00:00.000", end="00:00:02.000", text="Intro"),
+        CaptionCue(start="00:01:02.500", end="00:01:05.000", text="Main point"),
+    ]
+
+    assert _format_cues_with_timestamps(cues) == "[00:00] Intro\n[01:02] Main point"
 
 
 def test_parse_vtt_strips_cue_numbers():

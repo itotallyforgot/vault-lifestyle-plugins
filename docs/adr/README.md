@@ -24,3 +24,4 @@ Do not write ADRs for obvious implementation details or one-off local fixes.
 | [0001](0001-standalone-vault-overlay.md) | Accepted | This repo overlays optional plug-ins onto a standalone vault. |
 | [0002](0002-raw-ingest-writes-only.md) | Accepted | Ingest plug-ins write raw source pages only; wiki writes stay vault-owned. |
 | [0003](0003-per-integration-auth.md) | Accepted | Each integration owns its auth and credentials. |
+| [0004](0004-youtube-bulk-staging-handoff.md) | Accepted | YouTube bulk ingest uses resumable staging manifests and hands candidate findings to vault-side ingest. |

@@ -1,9 +1,10 @@
 """yt-dlp wrapper: metadata, captions, and audio download for a YouTube URL.
 
-Exposes three functions consumed by later slices:
+Exposes functions consumed by later slices:
 
 - `fetch_meta(url)` — metadata dict (Slice 4 builder).
 - `fetch_captions(url, lang)` — primary transcript path (Slice 5 CLI).
+- `fetch_caption_cues(url, lang)` — caption cues with VTT timestamps for provenance prep.
 - `download_audio(url, dest_dir)` — Whisper input (Slice 3 fallback).
 
 Caller never instantiates `YoutubeDL` directly. Tests mock at the
@@ -20,6 +21,7 @@ import html
 import logging
 import re
 import tempfile
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -30,6 +32,15 @@ logger = logging.getLogger(__name__)
 
 
 ExtractorErrorKind = Literal["network", "no_info", "no_audio_file", "unknown"]
+
+
+@dataclass(frozen=True)
+class CaptionCue:
+    """A parsed VTT cue with source timestamps preserved."""
+
+    start: str
+    end: str
+    text: str
 
 
 class ExtractorError(RuntimeError):
@@ -138,34 +149,26 @@ def fetch_captions(url: str, lang: str = "en") -> str | None:
     Raises:
         ExtractorError(kind="network"): yt-dlp's extract_info raised.
     """
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "skip_download": True,
-            "writesubtitles": True,
-            "writeautomaticsub": True,
-            "subtitleslangs": [lang],
-            "subtitlesformat": "vtt",
-            "outtmpl": str(td_path / "%(id)s.%(ext)s"),
-        }
-        try:
-            with YoutubeDL(cast(Any, opts)) as ydl:
-                ydl.extract_info(url, download=True)
-        except Exception as e:
-            raise ExtractorError("network", f"caption fetch failed for {url}: {e}") from e
+    vtt_content = _fetch_caption_vtt(url, lang)
+    if vtt_content is None:
+        return None
+    return _parse_vtt(vtt_content)
 
-        # Match all real-world shapes: bare, `-auto`, `-orig`, etc.
-        candidates = sorted(td_path.glob(f"*.{lang}*.vtt"))
-        if not candidates:
-            return None
 
-        # Prefer manual (no `-auto` suffix) over auto-generated when both exist.
-        manual = [c for c in candidates if "-auto" not in c.name]
-        chosen = manual[0] if manual else candidates[0]
+def fetch_caption_cues(url: str, lang: str = "en") -> list[CaptionCue] | None:
+    """Fetch captions for `url` and return parsed VTT cues with timestamps.
 
-        return _parse_vtt(chosen.read_text(encoding="utf-8"))
+    This is a prep API for provenance-aware callers. It intentionally leaves
+    `fetch_captions(url, lang)` unchanged: that function still returns plain
+    transcript text without timestamp anchors.
+
+    Raises:
+        ExtractorError(kind="network"): yt-dlp's extract_info raised.
+    """
+    vtt_content = _fetch_caption_vtt(url, lang)
+    if vtt_content is None:
+        return None
+    return _parse_vtt_cues(vtt_content)
 
 
 def download_audio(url: str, dest_dir: Path) -> Path:
@@ -230,7 +233,42 @@ def download_audio(url: str, dest_dir: Path) -> Path:
 
 
 _VTT_TAG_RE = re.compile(r"<[^>]+>")
+_VTT_TIMESTAMP_RE = re.compile(
+    r"^(?P<start>(?:\d{2}:)?\d{2}:\d{2}\.\d{3})\s+-->\s+"
+    r"(?P<end>(?:\d{2}:)?\d{2}:\d{2}\.\d{3})(?:\s+.*)?$"
+)
 _BOM = "﻿"
+
+
+def _fetch_caption_vtt(url: str, lang: str) -> str | None:
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+            "subtitleslangs": [lang],
+            "subtitlesformat": "vtt",
+            "outtmpl": str(td_path / "%(id)s.%(ext)s"),
+        }
+        try:
+            with YoutubeDL(cast(Any, opts)) as ydl:
+                ydl.extract_info(url, download=True)
+        except Exception as e:
+            raise ExtractorError("network", f"caption fetch failed for {url}: {e}") from e
+
+        # Match all real-world shapes: bare, `-auto`, `-orig`, etc.
+        candidates = sorted(td_path.glob(f"*.{lang}*.vtt"))
+        if not candidates:
+            return None
+
+        # Prefer manual (no `-auto` suffix) over auto-generated when both exist.
+        manual = [c for c in candidates if "-auto" not in c.name]
+        chosen = manual[0] if manual else candidates[0]
+
+        return chosen.read_text(encoding="utf-8")
 
 
 def _duration_filter(info_dict: dict[str, Any]) -> str | None:
@@ -255,18 +293,52 @@ def _parse_vtt(vtt_content: str) -> str:
 
     Empty input returns an empty string.
     """
-    # Strip BOM if present (UTF-8 byte order mark).
+    cues = _parse_vtt_cues(vtt_content)
+    lines: list[str] = []
+    for cue in cues:
+        cue_lines = cue.text.splitlines()
+        for cleaned in cue_lines:
+            # Rolling-window dedup: skip if identical to the previous emitted line.
+            if lines and lines[-1] == cleaned:
+                continue
+            lines.append(cleaned)
+    return "\n".join(lines)
+
+
+def _parse_vtt_cues(vtt_content: str) -> list[CaptionCue]:
+    """Parse a VTT subtitle string into cues with timestamp boundaries."""
     if vtt_content.startswith(_BOM):
         vtt_content = vtt_content[len(_BOM) :]
 
-    lines: list[str] = []
+    cues: list[CaptionCue] = []
+    current_start: str | None = None
+    current_end: str | None = None
+    current_lines: list[str] = []
+
+    def flush_current() -> None:
+        nonlocal current_start, current_end, current_lines
+        if current_start is None or current_end is None:
+            current_lines = []
+            return
+        text = "\n".join(current_lines).strip()
+        if text:
+            cues.append(CaptionCue(start=current_start, end=current_end, text=text))
+        current_start = None
+        current_end = None
+        current_lines = []
+
     for raw in vtt_content.splitlines():
         line = raw.strip()
         if not line:
+            flush_current()
             continue
         if line.startswith("WEBVTT") or line.startswith("NOTE"):
             continue
-        if "-->" in line:
+        timestamp_match = _VTT_TIMESTAMP_RE.match(line)
+        if timestamp_match:
+            flush_current()
+            current_start = timestamp_match.group("start")
+            current_end = timestamp_match.group("end")
             continue
         # Cue numbers (lines that are pure integers).
         if line.isdigit():
@@ -274,8 +346,20 @@ def _parse_vtt(vtt_content: str) -> str:
         cleaned = html.unescape(_VTT_TAG_RE.sub("", line)).strip()
         if not cleaned:
             continue
-        # Rolling-window dedup: skip if identical to the previous emitted line.
-        if lines and lines[-1] == cleaned:
-            continue
-        lines.append(cleaned)
-    return "\n".join(lines)
+        if current_start is not None:
+            current_lines.append(cleaned)
+
+    flush_current()
+    return cues
+
+
+def _format_cues_with_timestamps(cues: list[CaptionCue]) -> str:
+    """Format cues as transcript text with readable start-time anchors."""
+    return "\n".join(f"[{_timestamp_anchor(cue.start)}] {cue.text}" for cue in cues)
+
+
+def _timestamp_anchor(timestamp: str) -> str:
+    parts = timestamp.split(".")[0].split(":")
+    if len(parts) == 3 and parts[0] == "00":
+        return f"{parts[1]}:{parts[2]}"
+    return ":".join(parts)
