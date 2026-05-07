@@ -1,0 +1,48 @@
+[project]
+name = "vault-spotify"
+version = "0.1.0"
+description = "Spotify listening-history ingester for markdown-vault vaults — second plug-in in the vault-lifestyle-plugins family."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "vault-lifestyle-plugins contributors" }]
+dependencies = [
+    "spotipy>=2.23,<3.0",
+    "pydantic>=2.0",
+    "typer>=0.12",
+    "vault-lifestyle-plugins-lib",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+]
+
+[project.scripts]
+vault-spotify = "vault_spotify.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+# Path dep on the umbrella's lib/ — siblings consume the shared frontmatter
+# schema + vault resolver via this path link, not a published package.
+vault-lifestyle-plugins-lib = { path = "../lib", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "spotify_auth: tests that hit Spotify OAuth (requires browser; opt-in)",
+    "spotify_live: tests that hit Spotify API with live tokens (opt-in)",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src", "../lib"]
+pythonVersion = "3.12"
