@@ -10,7 +10,14 @@ from typer.testing import CliRunner
 
 from vault_yt import cli as cli_module
 from vault_yt.extractor import ExtractorError
-from vault_yt.manifest import default_manifest_path, load_manifest
+from vault_yt.manifest import (
+    ManifestItem,
+    add_candidate_finding,
+    default_manifest_path,
+    load_manifest,
+    new_manifest,
+    save_manifest,
+)
 from vault_yt.slug import make
 from vault_yt.whisper_fallback import WhisperUnavailableError
 
@@ -557,3 +564,133 @@ def test_batch_dry_run_expands_inputs_without_processing(tmp_path: Path, monkeyp
     assert result.exit_code == 0
     assert "would process: 1 videos" in result.output
     assert not (vault / ".vault-lifestyle").exists()
+
+
+def test_report_prints_existing_manifest_summary(tmp_path: Path) -> None:
+    vault = _vault(tmp_path)
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=vault,
+        inputs=[],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="Alpha",
+                position=0,
+                status="raw_written",
+                raw_path="raw/alpha.md",
+            )
+        ],
+    )
+    save_manifest(default_manifest_path(vault, "run-123"), manifest)
+
+    result = runner.invoke(
+        cli_module.app,
+        ["--report", "--run-id", "run-123", "--vault", str(vault)],
+    )
+
+    assert result.exit_code == 0
+    assert "run: run-123" in result.output
+    assert "raw_written: 1" in result.output
+    assert "raw/alpha.md" in result.output
+
+
+def test_add_finding_updates_manifest(tmp_path: Path) -> None:
+    vault = _vault(tmp_path)
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=vault,
+        inputs=[],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="Alpha",
+                position=0,
+                status="raw_written",
+                raw_path="raw/alpha.md",
+                source_url="https://youtu.be/abc123",
+            )
+        ],
+    )
+    save_manifest(default_manifest_path(vault, "run-123"), manifest)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--add-finding",
+            "--run-id",
+            "run-123",
+            "--video-id",
+            "abc123",
+            "--claim",
+            "Rust ownership prevents data races.",
+            "--transcript-span",
+            "cue:1-2",
+            "--confidence",
+            "0.8",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    updated = load_manifest(default_manifest_path(vault, "run-123"))
+    assert result.exit_code == 0
+    assert "added finding: abc123-finding-1" in result.output
+    assert updated.items[0].candidate_findings[0].claim == "Rust ownership prevents data races."
+    assert updated.items[0].candidate_findings_state == "ready"
+
+
+def test_add_evidence_updates_manifest(tmp_path: Path) -> None:
+    vault = _vault(tmp_path)
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=vault,
+        inputs=[],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="Alpha",
+                position=0,
+            )
+        ],
+    )
+    manifest = add_candidate_finding(
+        manifest,
+        "abc123",
+        claim="Rust ownership prevents data races.",
+        transcript_span="cue:1-2",
+    )
+    save_manifest(default_manifest_path(vault, "run-123"), manifest)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--add-evidence",
+            "--run-id",
+            "run-123",
+            "--video-id",
+            "abc123",
+            "--finding-id",
+            "abc123-finding-1",
+            "--evidence-url",
+            "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
+            "--verifier",
+            "Alex",
+            "--verification-result",
+            "accepted",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    updated = load_manifest(default_manifest_path(vault, "run-123"))
+    assert result.exit_code == 0
+    assert "added evidence: abc123-finding-1 accepted" in result.output
+    assert updated.items[0].verification_state == "complete"
+    assert updated.items[0].candidate_findings[0].verification_status == "accepted"

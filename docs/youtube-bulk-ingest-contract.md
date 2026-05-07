@@ -156,6 +156,19 @@ Candidate findings are not final knowledge. A candidate finding should include:
 Candidate findings may live in a raw-page section or manifest sidecar, but
 they remain handoff data until vault-side tooling accepts them.
 
+Current implementation stores candidate findings on each manifest item:
+
+- `id`: deterministic per video, `<video_id>-finding-<n>`.
+- `claim`.
+- `source_url`.
+- `raw_path`.
+- `video_id`.
+- `transcript_span`.
+- `confidence`.
+- `verification_status`.
+- `notes`.
+- `evidence`: list of verification evidence records.
+
 ## Verification Evidence
 
 Important facts should carry evidence before vault-side ingest accepts them.
@@ -172,6 +185,11 @@ Verification evidence records should include:
 
 This repo may collect and record verification evidence. It must not mark the
 claim as wiki knowledge.
+
+Current implementation supports manual evidence attachment through the CLI.
+`verification_status` is updated from the latest evidence result, and the item
+verification state becomes `pending`, `partial`, or `complete` based on all
+candidate findings for that video.
 
 ## Example: Single Video
 
