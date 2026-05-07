@@ -143,6 +143,33 @@ def test_yaml_serialization_is_stable() -> None:
     assert a == b
 
 
+def test_youtube_output_bytes_match_existing_shape() -> None:
+    fixed_now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+
+    md = build_raw_md(_meta(), "body", transcript_source="yt-dlp", clipped_at=fixed_now)
+
+    assert md == (
+        "---\n"
+        "title: Never Gonna Give You Up\n"
+        "source_url: https://youtu.be/dQw4w9WgXcQ\n"
+        "source_kind: youtube\n"
+        "channel: Rick Astley\n"
+        "channel_url: https://www.youtube.com/@RickAstleyYT\n"
+        "published_at: 2009-10-25\n"
+        "duration_seconds: 213\n"
+        "clipped_at: '2026-05-05T12:00:00Z'\n"
+        "transcript_source: yt-dlp\n"
+        "ingested: false\n"
+        "ingested_at: null\n"
+        "wiki_page: null\n"
+        "tags:\n"
+        "- youtube\n"
+        "---\n"
+        "\n"
+        "body"
+    )
+
+
 # ---------- write ----------
 
 
@@ -155,13 +182,14 @@ def test_write_creates_file(tmp_path: Path) -> None:
 
 
 def test_write_is_idempotent_when_force_false_and_path_missing(tmp_path: Path) -> None:
-    target = tmp_path / "abc-test.md"
+    target = tmp_path / "raw" / "abc-test.md"
     write(target, "hello\n")
     assert target.read_text() == "hello\n"
 
 
 def test_write_collision_without_force_raises(tmp_path: Path) -> None:
-    target = tmp_path / "abc-test.md"
+    target = tmp_path / "raw" / "abc-test.md"
+    target.parent.mkdir()
     target.write_text("existing")
     with pytest.raises(FileExistsError):
         write(target, "new content")
@@ -170,7 +198,8 @@ def test_write_collision_without_force_raises(tmp_path: Path) -> None:
 
 
 def test_write_collision_with_force_overwrites(tmp_path: Path) -> None:
-    target = tmp_path / "abc-test.md"
+    target = tmp_path / "raw" / "abc-test.md"
+    target.parent.mkdir()
     target.write_text("existing")
     result = write(target, "new content", force=True)
     assert result == target
@@ -186,7 +215,8 @@ def test_write_creates_parent_directories(tmp_path: Path) -> None:
 
 def test_write_atomicity_uses_tempfile_rename(tmp_path: Path, monkeypatch) -> None:
     """If a write is interrupted, the original file (if any) survives."""
-    target = tmp_path / "abc.md"
+    target = tmp_path / "raw" / "abc.md"
+    target.parent.mkdir()
     target.write_text("original")
 
     # Simulate write failure mid-stream by raising during the temp-file write.

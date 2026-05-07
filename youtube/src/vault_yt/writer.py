@@ -1,23 +1,19 @@
 """Build and write `raw/<slug>.md` files for the second-brain vault.
 
 The writer is the only thing in `vault-yt` that materializes a file under
-`<vault>/raw/`. It composes YAML frontmatter (validated against
-`lib/frontmatter_schema`) with a transcript body, then performs an atomic,
-collision-aware write.
+`<vault>/raw/`. It composes YouTube-specific frontmatter and delegates the
+shared raw-page validation, serialization, and atomic write behavior to
+`lib/raw_writer`.
 """
 
 from __future__ import annotations
 
-import contextlib
-import os
-import tempfile
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-import yaml
-from frontmatter_schema import validate_frontmatter
+from raw_writer import RawWriterError, build_raw_markdown, write_raw_file
 
 TranscriptSource = Literal["yt-dlp", "whisper-tiny", "whisper-base", "whisper-small"]
 
@@ -29,7 +25,7 @@ _VALID_TRANSCRIPT_SOURCES: tuple[str, ...] = (
 )
 
 
-class WriterError(RuntimeError):
+class WriterError(RawWriterError):
     """Raised on writer-side contract violations (bad meta, invalid args)."""
 
 
@@ -83,11 +79,7 @@ def build_raw_md(
         clipped_at=clipped_at or datetime.now(UTC),
     )
 
-    # Validate before serializing — catches contract bugs at the source.
-    validate_frontmatter(fm)
-
-    yaml_block = _serialize_frontmatter(fm)
-    return f"---\n{yaml_block}---\n\n{transcript}"
+    return build_raw_markdown(fm, transcript)
 
 
 def write(path: Path, content: str, force: bool = False) -> Path:
@@ -112,30 +104,10 @@ def write(path: Path, content: str, force: bool = False) -> Path:
         FileExistsError: when ``path`` exists and ``force=False``.
         OSError: passed through from the underlying filesystem.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    if path.exists() and not force:
-        raise FileExistsError(f"raw/<slug>.md already exists at {path} — pass --force to overwrite")
-
-    # Atomic write: temp file in the same directory, then rename. Same
-    # directory matters because rename is only atomic on the same FS.
-    parent = path.parent
-    fd, tmp_name = tempfile.mkstemp(dir=parent, prefix=path.name + ".", suffix=".tmp")
-    tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(content)
-        tmp_path.replace(path)
-    except BaseException:
-        # Clean up temp file on any failure (including KeyboardInterrupt).
-        with contextlib.suppress(FileNotFoundError):
-            tmp_path.unlink()
-        raise
-
-    return path
-
-
-# ----- internal helpers -----
+        return write_raw_file(path, content, force=force)
+    except RawWriterError as exc:
+        raise WriterError(str(exc)) from exc
 
 
 def _build_frontmatter_dict(
@@ -162,39 +134,3 @@ def _build_frontmatter_dict(
         "tags": ["youtube"],
     }
     return fm
-
-
-def _serialize_frontmatter(fm: dict[str, Any]) -> str:
-    """Serialize frontmatter dict to deterministic YAML.
-
-    Key order matches the spec's Frontmatter contract example. PyYAML's
-    ``safe_dump`` emits ``YYYY-MM-DD`` for ``date`` and ISO with offset for
-    timezone-aware ``datetime``; we coerce ``datetime`` to a Z-suffixed
-    string up-front so the schema's ISO-8601 pattern is satisfied
-    regardless of YAML emitter quirks.
-    """
-    serializable: dict[str, Any] = {}
-    for k, v in fm.items():
-        if isinstance(v, datetime):
-            # Force `Z`-suffix UTC string so the schema's tz-required pattern
-            # is satisfied regardless of YAML emitter quirks.
-            serializable[k] = _iso_z(v)
-        else:
-            # Leave bare `date` objects (and everything else) as-is — PyYAML
-            # emits dates as unquoted YAML timestamps (`2009-10-25`).
-            serializable[k] = v
-
-    return yaml.safe_dump(
-        serializable,
-        sort_keys=False,
-        default_flow_style=False,
-        allow_unicode=True,
-    )
-
-
-def _iso_z(ts: datetime) -> str:
-    """Format a tz-aware datetime as ``YYYY-MM-DDTHH:MM:SSZ`` (UTC)."""
-    if ts.tzinfo is None:
-        raise WriterError(f"clipped_at must be timezone-aware; got {ts!r}")
-    utc = ts.astimezone(UTC)
-    return utc.strftime("%Y-%m-%dT%H:%M:%SZ")

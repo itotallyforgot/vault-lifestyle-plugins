@@ -7,6 +7,7 @@ license = { text = "MIT" }
 authors = [{ name = "vault-lifestyle-plugins contributors" }]
 dependencies = [
     "pydantic>=2.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +25,7 @@ build-backend = "setuptools.build_meta"
 # Flat-module layout: vault_resolver and frontmatter_schema are top-level
 # importable modules. The verify line `from vault_resolver import ...`
 # requires this shape, not a package wrapper.
-py-modules = ["vault_resolver", "frontmatter_schema"]
+py-modules = ["vault_resolver", "frontmatter_schema", "raw_writer"]
 
 [tool.setuptools.package-data]
 "*" = ["schemas/*.json"]
