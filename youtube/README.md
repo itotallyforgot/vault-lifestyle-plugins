@@ -118,6 +118,33 @@ Use `--run-id` to make the staging manifest name stable and `--resume` to
 continue a previous run. `--dry-run` expands the inputs and prints how many
 videos would be processed without fetching transcripts or writing a manifest.
 
+Candidate findings and verification evidence are manifest handoff data. They
+do not write `wiki/`; vault-side ingest decides what becomes accepted
+knowledge.
+
+Attach a candidate finding:
+
+```bash
+uv --directory youtube run vault-yt --add-finding --run-id eng-001 --video-id <id> \
+  --claim "Important claim" --transcript-span "00:01:00.000 --> 00:01:08.000" \
+  --confidence 0.8 --vault /path/to/Second-Brain
+```
+
+Attach verification evidence:
+
+```bash
+uv --directory youtube run vault-yt --add-evidence --run-id eng-001 \
+  --video-id <id> --finding-id <id>-finding-1 \
+  --evidence-url "https://example.com/source" --verifier "George" \
+  --verification-result accepted --vault /path/to/Second-Brain
+```
+
+Print an operator report:
+
+```bash
+uv --directory youtube run vault-yt --report --run-id eng-001 --vault /path/to/Second-Brain
+```
+
 ## Output
 
 The generated frontmatter includes the fields the vault expects:

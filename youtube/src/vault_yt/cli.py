@@ -24,10 +24,14 @@ from vault_yt.inputs import InputExpansionError, WorkItem, expand_inputs
 from vault_yt.manifest import (
     ManifestError,
     ManifestItem,
+    VerificationEvidence,
     WorkInput,
+    add_candidate_finding,
+    add_verification_evidence,
     default_manifest_path,
     load_manifest,
     new_manifest,
+    render_run_report,
     save_manifest,
     update_item_status,
 )
@@ -136,6 +140,57 @@ def command(
         bool,
         typer.Option("--resume", help="Resume an existing batch manifest."),
     ] = False,
+    report: Annotated[
+        bool,
+        typer.Option("--report", help="Print a report for an existing batch manifest."),
+    ] = False,
+    add_finding: Annotated[
+        bool,
+        typer.Option("--add-finding", help="Attach a candidate finding to a manifest item."),
+    ] = False,
+    add_evidence: Annotated[
+        bool,
+        typer.Option("--add-evidence", help="Attach verification evidence to a candidate finding."),
+    ] = False,
+    video_id: Annotated[
+        str | None,
+        typer.Option("--video-id", help="Manifest video ID for finding/evidence updates."),
+    ] = None,
+    claim: Annotated[
+        str | None,
+        typer.Option("--claim", help="Candidate finding claim text."),
+    ] = None,
+    transcript_span: Annotated[
+        str | None,
+        typer.Option("--transcript-span", help="Candidate finding transcript span."),
+    ] = None,
+    confidence: Annotated[
+        float | None,
+        typer.Option("--confidence", min=0.0, max=1.0, help="Candidate finding confidence."),
+    ] = None,
+    finding_id: Annotated[
+        str | None,
+        typer.Option("--finding-id", help="Candidate finding ID for evidence updates."),
+    ] = None,
+    evidence_url: Annotated[
+        str | None,
+        typer.Option("--evidence-url", help="Verification evidence URL or citation URL."),
+    ] = None,
+    verifier: Annotated[
+        str | None,
+        typer.Option("--verifier", help="Name or handle of the verifier."),
+    ] = None,
+    verification_result: Annotated[
+        str | None,
+        typer.Option(
+            "--verification-result",
+            help="Verification result: accepted, rejected, unresolved, or conflicting.",
+        ),
+    ] = None,
+    notes: Annotated[
+        str | None,
+        typer.Option("--notes", help="Optional notes for finding or evidence updates."),
+    ] = None,
 ) -> None:
     """Fetch a transcript and write `<vault>/raw/<slug>.md`."""
     _configure_logging(verbose)
@@ -150,6 +205,35 @@ def command(
         _fail(4, f"raw directory missing: {raw_dir}")
     if not os.access(raw_dir, os.W_OK):
         _fail(4, f"raw directory is not writable: {raw_dir}")
+
+    if report:
+        _print_report(vault_path=vault_path, run_id=run_id)
+        raise typer.Exit(0)
+
+    if add_finding:
+        _add_finding(
+            vault_path=vault_path,
+            run_id=run_id,
+            video_id=video_id,
+            claim=claim,
+            transcript_span=transcript_span,
+            confidence=confidence,
+            notes=notes,
+        )
+        raise typer.Exit(0)
+
+    if add_evidence:
+        _add_evidence(
+            vault_path=vault_path,
+            run_id=run_id,
+            video_id=video_id,
+            finding_id=finding_id,
+            evidence_url=evidence_url,
+            verifier=verifier,
+            verification_result=verification_result,
+            notes=notes,
+        )
+        raise typer.Exit(0)
 
     batch_inputs = _batch_inputs(url_file=url_file, playlist=playlist)
     if batch_inputs:
@@ -390,6 +474,85 @@ def _run_batch(
         raise typer.Exit(1)
 
 
+def _print_report(*, vault_path: Path, run_id: str | None) -> None:
+    path = _existing_manifest_path(vault_path, run_id)
+    typer.echo(render_run_report(load_manifest(path)), nl=False)
+
+
+def _add_finding(
+    *,
+    vault_path: Path,
+    run_id: str | None,
+    video_id: str | None,
+    claim: str | None,
+    transcript_span: str | None,
+    confidence: float | None,
+    notes: str | None,
+) -> None:
+    if not video_id:
+        _fail(2, "--video-id is required with --add-finding")
+    if not claim:
+        _fail(2, "--claim is required with --add-finding")
+    if not transcript_span:
+        _fail(2, "--transcript-span is required with --add-finding")
+
+    path = _existing_manifest_path(vault_path, run_id)
+    manifest = load_manifest(path)
+    updated = add_candidate_finding(
+        manifest,
+        video_id,
+        claim=claim,
+        transcript_span=transcript_span,
+        confidence=confidence,
+        notes=notes,
+    )
+    save_manifest(path, updated)
+    item = _find_manifest_item(updated, video_id)
+    typer.echo(f"added finding: {item.candidate_findings[-1].id}")
+
+
+def _add_evidence(
+    *,
+    vault_path: Path,
+    run_id: str | None,
+    video_id: str | None,
+    finding_id: str | None,
+    evidence_url: str | None,
+    verifier: str | None,
+    verification_result: str | None,
+    notes: str | None,
+) -> None:
+    if not video_id:
+        _fail(2, "--video-id is required with --add-evidence")
+    if not finding_id:
+        _fail(2, "--finding-id is required with --add-evidence")
+    if not evidence_url:
+        _fail(2, "--evidence-url is required with --add-evidence")
+    if not verifier:
+        _fail(2, "--verifier is required with --add-evidence")
+    if verification_result not in {"accepted", "rejected", "unresolved", "conflicting"}:
+        _fail(2, "--verification-result must be accepted, rejected, unresolved, or conflicting")
+
+    path = _existing_manifest_path(vault_path, run_id)
+    evidence = VerificationEvidence(
+        evidence_url=evidence_url,
+        verifier=verifier,
+        checked_at=datetime.now(UTC).replace(microsecond=0),
+        result=cast(
+            Literal["accepted", "rejected", "unresolved", "conflicting"], verification_result
+        ),
+        notes=notes,
+    )
+    updated = add_verification_evidence(
+        load_manifest(path),
+        video_id=video_id,
+        finding_id=finding_id,
+        evidence=evidence,
+    )
+    save_manifest(path, updated)
+    typer.echo(f"added evidence: {finding_id} {verification_result}")
+
+
 def main() -> None:
     """Console-script entrypoint."""
     app()
@@ -525,6 +688,22 @@ def _manifest_item(position: int, item: WorkItem) -> ManifestItem:
 
 def _default_run_id() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H%M%SZ-youtube")
+
+
+def _existing_manifest_path(vault_path: Path, run_id: str | None) -> Path:
+    if not run_id:
+        _fail(2, "--run-id is required for manifest update/report actions")
+    path = default_manifest_path(vault_path, run_id)
+    if not path.is_file():
+        _fail(4, f"manifest missing: {path}")
+    return path
+
+
+def _find_manifest_item(manifest, video_id: str):
+    for item in manifest.items:
+        if item.video_id == video_id:
+            return item
+    raise AssertionError("updated manifest item missing")
 
 
 def _slug_date(meta: VideoMeta) -> date:
