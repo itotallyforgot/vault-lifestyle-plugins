@@ -49,8 +49,7 @@ def auth(
         raise typer.Exit(code=6) from e
 
     typer.echo(
-        f"Starting Spotify OAuth dance (CLIENT_ID={cid[:8]}...). "
-        "A browser window will open."
+        f"Starting Spotify OAuth dance (CLIENT_ID={cid[:8]}...). A browser window will open."
     )
     try:
         run_auth_dance(client_id=cid)
@@ -58,19 +57,14 @@ def auth(
         typer.echo(f"OAuth dance failed: {e}", err=True)
         raise typer.Exit(code=6) from e
 
-    typer.echo(
-        "Tokens persisted. `vault-spotify recent` becomes available in Slice 4 "
-        "(OGR-75)."
-    )
+    typer.echo("Tokens persisted. `vault-spotify recent` becomes available in Slice 4 (OGR-75).")
 
 
 @app.command()
 def recent(
     vault: str | None = typer.Option(None, "--vault", help="Vault path."),
     limit: int = typer.Option(50, "--limit", help="Max tracks (Spotify caps at 50)."),
-    force: bool = typer.Option(
-        False, "--force", help="Overwrite existing per-event files."
-    ),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing per-event files."),
     verbose: bool = typer.Option(False, "--verbose", help="Per-step logging."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing."),
 ) -> None:
