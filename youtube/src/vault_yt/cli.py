@@ -8,6 +8,7 @@ import tempfile
 import time
 import traceback
 from collections.abc import Callable, Mapping
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, NoReturn, TypedDict, cast
 from urllib.parse import urlparse
@@ -116,7 +117,7 @@ def command(
     except ValueError as e:
         _fail(5, f"metadata error: {e}")
 
-    slug = make(meta["id"], meta["title"])
+    slug = make(meta["id"], meta["title"], _slug_date(meta))
     target = raw_dir / f"{slug}.md"
     source_url = _source_url(meta["id"])
 
@@ -274,6 +275,15 @@ def _existing_source_url(path: Path) -> str | None:
 
 def _source_url(video_id: str) -> str:
     return f"https://youtu.be/{video_id}"
+
+
+def _slug_date(meta: VideoMeta) -> date:
+    published_at = meta["published_at"]
+    if isinstance(published_at, datetime):
+        return published_at.date()
+    if isinstance(published_at, date):
+        return published_at
+    return datetime.now(UTC).date()
 
 
 def _dry_run_preview(content: str, body_chars: int = 200) -> str:

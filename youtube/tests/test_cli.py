@@ -39,7 +39,7 @@ def _meta(**overrides: Any) -> dict[str, Any]:
 
 
 def _raw_path(vault: Path, meta: dict[str, Any]) -> Path:
-    return vault / "raw" / f"{make(meta['id'], meta['title'])}.md"
+    return vault / "raw" / f"{make(meta['id'], meta['title'], meta['published_at'])}.md"
 
 
 def _install_caption_path(monkeypatch, meta: dict[str, Any] | None = None) -> dict[str, Any]:
