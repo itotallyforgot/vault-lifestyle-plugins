@@ -35,9 +35,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
-DEFAULT_CONFIG_PATH = (
-    Path.home() / ".config" / "vault-lifestyle-plugins" / "spotify.toml"
-)
+DEFAULT_CONFIG_PATH = Path.home() / ".config" / "vault-lifestyle-plugins" / "spotify.toml"
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:8888/callback"
 DEFAULT_SCOPES: tuple[str, ...] = (
     "user-read-recently-played",
@@ -287,8 +285,7 @@ def load_or_refresh_token(
     if not isinstance(token, str) or not token:
         raise MissingTokensError(
             "refresh_failed",
-            "spotipy returned an empty / invalid access token; "
-            "re-run `vault-spotify auth`.",
+            "spotipy returned an empty / invalid access token; re-run `vault-spotify auth`.",
         )
 
     return token

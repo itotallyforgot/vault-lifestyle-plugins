@@ -22,7 +22,6 @@ from vault_spotify.auth import (
     run_auth_dance,
 )
 
-
 # ============================================================
 # resolve_client_id — chain precedence
 # ============================================================
@@ -32,9 +31,7 @@ def test_resolve_arg_takes_precedence(tmp_path: Path) -> None:
     cfg = tmp_path / "spotify.toml"
     cfg.write_text('client_id = "from-config"\n')
 
-    result = resolve_client_id(
-        "from-arg", env={"SPOTIFY_CLIENT_ID": "from-env"}, config_path=cfg
-    )
+    result = resolve_client_id("from-arg", env={"SPOTIFY_CLIENT_ID": "from-env"}, config_path=cfg)
 
     assert result == "from-arg"
 
@@ -43,9 +40,7 @@ def test_resolve_falls_back_to_env(tmp_path: Path) -> None:
     cfg = tmp_path / "spotify.toml"
     cfg.write_text('client_id = "from-config"\n')
 
-    result = resolve_client_id(
-        None, env={"SPOTIFY_CLIENT_ID": "from-env"}, config_path=cfg
-    )
+    result = resolve_client_id(None, env={"SPOTIFY_CLIENT_ID": "from-env"}, config_path=cfg)
 
     assert result == "from-env"
 
@@ -156,9 +151,7 @@ def test_read_config_returns_value(tmp_path: Path) -> None:
 def test_default_token_cache_uses_explicit_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv(
-        "VAULT_SPOTIFY_TOKEN_CACHE", str(tmp_path / "explicit-tokens.json")
-    )
+    monkeypatch.setenv("VAULT_SPOTIFY_TOKEN_CACHE", str(tmp_path / "explicit-tokens.json"))
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
 
     result = _default_token_cache_path()
@@ -187,12 +180,7 @@ def test_default_token_cache_falls_back_to_home_local_share(
     result = _default_token_cache_path()
 
     assert (
-        result
-        == tmp_path
-        / ".local"
-        / "share"
-        / "vault-lifestyle-plugins"
-        / "spotify-tokens.json"
+        result == tmp_path / ".local" / "share" / "vault-lifestyle-plugins" / "spotify-tokens.json"
     )
 
 
@@ -232,12 +220,7 @@ def test_default_token_cache_treats_empty_xdg_as_unset(
     result = _default_token_cache_path()
 
     assert (
-        result
-        == tmp_path
-        / ".local"
-        / "share"
-        / "vault-lifestyle-plugins"
-        / "spotify-tokens.json"
+        result == tmp_path / ".local" / "share" / "vault-lifestyle-plugins" / "spotify-tokens.json"
     )
 
 
@@ -267,9 +250,7 @@ def _install_fake_spotipy(
     return fake_module, fake_pkce_instance
 
 
-def test_run_auth_dance_passes_pkce_args(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_auth_dance_passes_pkce_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_module, _ = _install_fake_spotipy(monkeypatch)
     cache = tmp_path / "tokens.json"
 
@@ -329,6 +310,7 @@ def test_run_auth_dance_kwargs_match_real_spotipy_pkce_signature(
     real `SpotifyPKCE` enforces the actual signature — passing a wrong
     kwarg here raises TypeError and fails the test."""
     from unittest.mock import create_autospec
+
     from spotipy.oauth2 import SpotifyPKCE as RealSpotifyPKCE
 
     fake_module = MagicMock()
@@ -344,15 +326,11 @@ def test_run_auth_dance_kwargs_match_real_spotipy_pkce_signature(
     autospec_class.return_value.get_access_token.assert_called_once()
 
 
-def test_run_auth_dance_open_browser_false(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_auth_dance_open_browser_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Headless mode: open_browser=False should reach the SpotifyPKCE constructor."""
     fake_module, _ = _install_fake_spotipy(monkeypatch)
 
-    run_auth_dance(
-        client_id="test-id", cache_path=tmp_path / "tokens.json", open_browser=False
-    )
+    run_auth_dance(client_id="test-id", cache_path=tmp_path / "tokens.json", open_browser=False)
 
     assert fake_module.SpotifyPKCE.call_args.kwargs["open_browser"] is False
 
@@ -360,17 +338,13 @@ def test_run_auth_dance_open_browser_false(
 def test_run_auth_dance_wraps_spotipy_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fake_spotipy(
-        monkeypatch, get_access_token_raises=RuntimeError("user denied")
-    )
+    _install_fake_spotipy(monkeypatch, get_access_token_raises=RuntimeError("user denied"))
 
     with pytest.raises(SpotifyAuthError, match="OAuth dance failed"):
         run_auth_dance(client_id="test-id", cache_path=tmp_path / "tokens.json")
 
 
-def _patch_spotipy_import_error(
-    monkeypatch: pytest.MonkeyPatch, exc: BaseException
-) -> None:
+def _patch_spotipy_import_error(monkeypatch: pytest.MonkeyPatch, exc: BaseException) -> None:
     """Force `import spotipy.oauth2` to raise `exc`."""
     monkeypatch.delitem(sys.modules, "spotipy.oauth2", raising=False)
     real_import = builtins.__import__
@@ -387,9 +361,7 @@ def test_run_auth_dance_raises_when_spotipy_unavailable_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ImportError path: spotipy not installed."""
-    _patch_spotipy_import_error(
-        monkeypatch, ImportError("No module named spotipy.oauth2")
-    )
+    _patch_spotipy_import_error(monkeypatch, ImportError("No module named spotipy.oauth2"))
 
     with pytest.raises(SpotifyAuthError, match="spotipy unavailable"):
         run_auth_dance(client_id="test-id", cache_path=tmp_path / "tokens.json")
@@ -493,9 +465,7 @@ def test_load_raises_when_spotipy_unavailable_import(
 ) -> None:
     cache = tmp_path / "tokens.json"
     cache.write_text('{"access_token": "fake"}')
-    _patch_spotipy_import_error(
-        monkeypatch, ImportError("No module named spotipy.oauth2")
-    )
+    _patch_spotipy_import_error(monkeypatch, ImportError("No module named spotipy.oauth2"))
 
     with pytest.raises(SpotifyAuthError, match="spotipy unavailable"):
         load_or_refresh_token(client_id="test-id", cache_path=cache)
@@ -519,9 +489,7 @@ def test_load_raises_malformed_cache_when_read_text_fails(
     → classify as malformed_cache, not refresh_failed."""
     cache = tmp_path / "tokens.json"
     cache.write_bytes(b"\x80\xff\xfe\xfd")  # invalid UTF-8
-    _install_fake_spotipy(
-        monkeypatch, get_access_token_raises=RuntimeError("refresh fail")
-    )
+    _install_fake_spotipy(monkeypatch, get_access_token_raises=RuntimeError("refresh fail"))
 
     with pytest.raises(MissingTokensError) as exc_info:
         load_or_refresh_token(client_id="test-id", cache_path=cache)
