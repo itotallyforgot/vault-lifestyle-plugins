@@ -83,8 +83,8 @@ from vault_spotify.auth import (
 
 ## What's NOT in this slice
 
-- `vault-spotify recent` — Slice 4 (OGR-75). Currently raises
-  `NotImplementedError`.
+- `vault-spotify recent` — Slice 4 (OGR-75). Currently prints a clean
+  deferred-feature message and exits with code `7`.
 - Spotipy client wrapper + Pydantic models — Slice 2 (OGR-73).
 - Slug + writer — Slice 3 (OGR-74).
 - CI lane — Slice 5 (OGR-76).

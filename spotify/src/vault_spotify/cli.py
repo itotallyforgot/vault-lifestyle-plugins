@@ -1,7 +1,7 @@
 """vault-spotify CLI entrypoint (Typer).
 
-Slice 1 ships the `auth` subcommand only. `recent` is stubbed to raise
-`NotImplementedError` for Slice 4 (OGR-75) to fill in.
+Slice 1 ships the `auth` subcommand only. `recent` exits cleanly as a
+deferred feature until Slice 4 (OGR-75) fills it in.
 """
 
 from __future__ import annotations
@@ -58,7 +58,10 @@ def auth(
         typer.echo(f"OAuth dance failed: {e}", err=True)
         raise typer.Exit(code=6) from e
 
-    typer.echo("Tokens persisted. You can now run `vault-spotify recent` (Slice 4).")
+    typer.echo(
+        "Tokens persisted. `vault-spotify recent` becomes available in Slice 4 "
+        "(OGR-75)."
+    )
 
 
 @app.command()
@@ -69,18 +72,19 @@ def recent(
         False, "--force", help="Overwrite existing per-event files."
     ),
     verbose: bool = typer.Option(False, "--verbose", help="Per-step logging."),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview without writing."
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing."),
 ) -> None:
-    """Fetch recently-played tracks; write per-event raw/<slug>.md files.
+    """Deferred: fetch recently-played tracks in Slice 4 (OGR-75).
 
-    Slice 4 (OGR-75) implements this. Currently raises NotImplementedError.
+    Exit codes:
+        7: command is intentionally unavailable until Slice 4 (OGR-75).
     """
-    raise NotImplementedError(
-        "vault-spotify recent ships in Slice 4 (OGR-75). "
-        "Slice 1 only includes `vault-spotify auth`."
+    typer.echo(
+        "vault-spotify recent is not available yet; it ships in Slice 4 "
+        "(OGR-75). Slice 1 only includes `vault-spotify auth`.",
+        err=True,
     )
+    raise typer.Exit(code=7)
 
 
 def main() -> None:

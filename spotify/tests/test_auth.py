@@ -75,9 +75,7 @@ def test_resolve_raises_when_nothing_resolves(tmp_path: Path) -> None:
 
 
 def test_resolve_strips_whitespace_in_arg() -> None:
-    result = resolve_client_id(
-        "  spaced  ", env={}, config_path=Path("/nonexistent")
-    )
+    result = resolve_client_id("  spaced  ", env={}, config_path=Path("/nonexistent"))
     assert result == "spaced"
 
 
@@ -158,7 +156,9 @@ def test_read_config_returns_value(tmp_path: Path) -> None:
 def test_default_token_cache_uses_explicit_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("VAULT_SPOTIFY_TOKEN_CACHE", str(tmp_path / "explicit-tokens.json"))
+    monkeypatch.setenv(
+        "VAULT_SPOTIFY_TOKEN_CACHE", str(tmp_path / "explicit-tokens.json")
+    )
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
 
     result = _default_token_cache_path()
@@ -188,7 +188,11 @@ def test_default_token_cache_falls_back_to_home_local_share(
 
     assert (
         result
-        == tmp_path / ".local" / "share" / "vault-lifestyle-plugins" / "spotify-tokens.json"
+        == tmp_path
+        / ".local"
+        / "share"
+        / "vault-lifestyle-plugins"
+        / "spotify-tokens.json"
     )
 
 
@@ -229,7 +233,11 @@ def test_default_token_cache_treats_empty_xdg_as_unset(
 
     assert (
         result
-        == tmp_path / ".local" / "share" / "vault-lifestyle-plugins" / "spotify-tokens.json"
+        == tmp_path
+        / ".local"
+        / "share"
+        / "vault-lifestyle-plugins"
+        / "spotify-tokens.json"
     )
 
 
@@ -391,9 +399,7 @@ def test_run_auth_dance_raises_when_spotipy_unavailable_oserror(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """OSError path: native deps missing (parity with whisper_fallback)."""
-    _patch_spotipy_import_error(
-        monkeypatch, OSError("dlopen failed: libsomething")
-    )
+    _patch_spotipy_import_error(monkeypatch, OSError("dlopen failed: libsomething"))
 
     with pytest.raises(SpotifyAuthError, match="spotipy unavailable"):
         run_auth_dance(client_id="test-id", cache_path=tmp_path / "tokens.json")
@@ -500,9 +506,7 @@ def test_load_raises_when_spotipy_unavailable_oserror(
 ) -> None:
     cache = tmp_path / "tokens.json"
     cache.write_text('{"access_token": "fake"}')
-    _patch_spotipy_import_error(
-        monkeypatch, OSError("dlopen failed: libsomething")
-    )
+    _patch_spotipy_import_error(monkeypatch, OSError("dlopen failed: libsomething"))
 
     with pytest.raises(SpotifyAuthError, match="spotipy unavailable"):
         load_or_refresh_token(client_id="test-id", cache_path=cache)
