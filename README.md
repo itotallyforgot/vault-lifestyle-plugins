@@ -16,7 +16,7 @@ A monorepo of independently-shippable plug-ins that overlay onto a second-brain-
 
 | Plug-in | Direction | Runtime | Status |
 |---|---|---|---|
-| `youtube/` | Ingest (transcript) | Python | **MVP in progress:** on-demand CLI tracer |
+| `youtube/` | Ingest (transcript) | Python | **MVP shipped** — `vault-yt <url>` writes a transcript page to `<vault>/raw/`. Captions via yt-dlp; Whisper fallback when captions are absent. |
 | `spotify/` | Ingest (listening history) | Python | Planned |
 | `gmail/` | Action (spam triage, label) | TBD (Python or Node) | Planned |
 | `calendar/` | Action (event management) | TBD | Planned |
@@ -27,8 +27,8 @@ A monorepo of independently-shippable plug-ins that overlay onto a second-brain-
 
 - **Plug-in for a standalone vault.** second-brain depends on no plug-ins; this repo overlays onto a target vault when installed. The vault works without us; we add capability.
 - **Per-integration runtime freedom.** YouTube uses Python (yt-dlp). A future Gmail agent might use Node (better SDK). Each subdir picks its own toolchain.
-- **Output convention.** Every ingest plug-in writes a vault-compatible file under `raw/` with frontmatter compatible with second-brain's `/vault ingest` skill (`ingested: false`, `clipped_at`, source URL field, etc.). The shared `lib/` package codifies the contract.
-- **No vault writes outside `raw/`.** Plug-ins ingest sources; the vault's own `/vault ingest` skill is the only writer for `wiki/`. Action-direction plug-ins (email, calendar) DO NOT touch the vault; they act on external services.
+- **Output convention.** Every ingest plug-in writes `raw/<slug>.md` with frontmatter compatible with second-brain's `/vault ingest` skill (`source_url`, `clipped_at`, `ingested: false` are required; rich optional fields preserved as source-page metadata). Slug shape is per-plug-in (e.g. YouTube uses `<video_id>-<sanitized-title>`). The shared `lib/frontmatter_schema.py` Pydantic model + `lib/schemas/raw_frontmatter.json` JSON Schema codify the contract.
+- **No vault writes outside `raw/`.** Plug-ins ingest sources; the vault's own `/vault ingest` skill is the only writer for `wiki/`. Action-direction plug-ins (email, calendar) DO NOT touch the vault — they act on external services.
 - **Auth handled per integration.** Public sources (YouTube videos, RSS) need none. Personal data (Spotify history, Gmail) goes through OAuth via the integration's local config. No central auth broker; each plug-in owns its own credentials.
 
 ## Install
@@ -39,23 +39,30 @@ Pick the integrations you want. Each has its own install / config story document
 
 ```
 vault-lifestyle-plugins/
-├── README.md             ← this file
-├── LICENSE
+├── README.md                     ← this file
+├── LICENSE                        (MIT)
+├── CONTRIBUTING.md
 ├── .gitignore
-├── lib/                  ← shared utilities (Python; bridge to other runtimes via JSON)
-│   └── vault_write/      ← raw/ writer + frontmatter validator
-├── youtube/              ← Python, yt-dlp + Whisper, on-demand CLI
+├── .github/                       ← CI: gitleaks, zizmor, ruff, pytest, scorecard, dependabot
+├── lib/                           ← shared utilities (Python)
+│   ├── pyproject.toml
+│   ├── vault_resolver.py          ← --vault → $VAULT_PATH → ~/.config/...toml
+│   ├── frontmatter_schema.py      ← Pydantic model for raw/ frontmatter
+│   └── schemas/
+│       └── raw_frontmatter.json   ← JSON-schema mirror for non-Python siblings
+├── youtube/                       ← Python, yt-dlp + Whisper, on-demand CLI (vault-yt)
 │   ├── pyproject.toml
 │   ├── README.md
-│   └── src/
-├── spotify/              ← (planned)
-├── gmail/                ← (planned)
-└── ...                   ← additional integrations as siblings
+│   ├── src/vault_yt/
+│   └── tests/
+├── spotify/                       ← (planned)
+├── gmail/                         ← (planned)
+└── ...                            ← additional integrations as siblings
 ```
 
 Each integration is independently:
 
-- Runnable (`uv --directory youtube run vault-yt <url>`)
+- Runnable (`vault-yt <url>` for the YouTube plug-in once installed; from a checkout, `uv --directory youtube run vault-yt <url>`)
 - Versioned (its own `pyproject.toml` / `package.json`)
 - Documented (its own README with install + use)
 - Tested (its own test suite under `youtube/tests/`)
