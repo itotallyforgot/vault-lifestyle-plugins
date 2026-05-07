@@ -9,10 +9,14 @@ from pathlib import Path
 from vault_yt.manifest import (
     ManifestItem,
     RunManifest,
+    VerificationEvidence,
     WorkInput,
+    add_candidate_finding,
+    add_verification_evidence,
     default_manifest_path,
     load_manifest,
     new_manifest,
+    render_run_report,
     save_manifest,
     update_item_status,
 )
@@ -130,3 +134,198 @@ def test_update_item_status_unknown_video_raises(tmp_path: Path) -> None:
         assert "missing" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_add_candidate_finding_sets_pending_handoff_state(tmp_path: Path) -> None:
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=tmp_path,
+        inputs=[WorkInput(kind="video", ref="https://youtu.be/abc123")],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="A video",
+                position=0,
+                raw_path="raw/a-video.md",
+                source_url="https://youtu.be/abc123",
+            )
+        ],
+        now=datetime(2026, 5, 7, 20, 30, tzinfo=UTC),
+    )
+
+    updated = add_candidate_finding(
+        manifest,
+        "abc123",
+        claim="Rust ownership prevents data races at compile time.",
+        transcript_span="00:01:00.000 --> 00:01:08.000",
+        confidence=0.82,
+        notes="Speaker framed this as a core language guarantee.",
+    )
+
+    finding = updated.items[0].candidate_findings[0]
+    assert updated.items[0].candidate_findings_state == "ready"
+    assert updated.items[0].verification_state == "pending"
+    assert finding.id == "abc123-finding-1"
+    assert finding.claim == "Rust ownership prevents data races at compile time."
+    assert finding.source_url == "https://youtu.be/abc123"
+    assert finding.raw_path == "raw/a-video.md"
+    assert finding.verification_status == "pending"
+
+
+def test_add_verification_evidence_updates_finding_and_item_state(tmp_path: Path) -> None:
+    checked_at = datetime(2026, 5, 7, 21, 0, tzinfo=UTC)
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=tmp_path,
+        inputs=[],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="A video",
+                position=0,
+                raw_path="raw/a-video.md",
+                source_url="https://youtu.be/abc123",
+            )
+        ],
+    )
+    manifest = add_candidate_finding(
+        manifest,
+        "abc123",
+        claim="Claim that needs checking.",
+        transcript_span="cue:1-2",
+    )
+
+    updated = add_verification_evidence(
+        manifest,
+        video_id="abc123",
+        finding_id="abc123-finding-1",
+        evidence=VerificationEvidence(
+            evidence_url="https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
+            verifier="George",
+            checked_at=checked_at,
+            result="accepted",
+            notes="Rust Book supports this.",
+        ),
+    )
+
+    finding = updated.items[0].candidate_findings[0]
+    assert updated.items[0].verification_state == "complete"
+    assert finding.verification_status == "accepted"
+    assert finding.evidence[0].result == "accepted"
+    assert finding.evidence[0].checked_at == checked_at
+
+
+def test_add_verification_evidence_can_leave_item_partial(tmp_path: Path) -> None:
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=tmp_path,
+        inputs=[],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="A video",
+                position=0,
+            )
+        ],
+    )
+    manifest = add_candidate_finding(manifest, "abc123", claim="Accepted.", transcript_span="cue:1")
+    manifest = add_candidate_finding(
+        manifest, "abc123", claim="Still pending.", transcript_span="cue:2"
+    )
+
+    updated = add_verification_evidence(
+        manifest,
+        video_id="abc123",
+        finding_id="abc123-finding-1",
+        evidence=VerificationEvidence(
+            evidence_url="https://example.com",
+            verifier="George",
+            checked_at=datetime(2026, 5, 7, 21, 0, tzinfo=UTC),
+            result="accepted",
+        ),
+    )
+
+    assert updated.items[0].verification_state == "partial"
+    assert [finding.verification_status for finding in updated.items[0].candidate_findings] == [
+        "accepted",
+        "pending",
+    ]
+
+
+def test_candidate_findings_and_evidence_roundtrip_json(tmp_path: Path) -> None:
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=tmp_path,
+        inputs=[],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="A video",
+                position=0,
+            )
+        ],
+        now=datetime(2026, 5, 7, 20, 30, tzinfo=UTC),
+    )
+    manifest = add_candidate_finding(manifest, "abc123", claim="Claim.", transcript_span="cue:1")
+    manifest = add_verification_evidence(
+        manifest,
+        video_id="abc123",
+        finding_id="abc123-finding-1",
+        evidence=VerificationEvidence(
+            evidence_url="https://example.com",
+            verifier="George",
+            checked_at=datetime(2026, 5, 7, 21, 0, tzinfo=UTC),
+            result="unresolved",
+        ),
+    )
+    path = default_manifest_path(tmp_path, "run-123")
+
+    save_manifest(path, manifest)
+    loaded = load_manifest(path)
+
+    assert loaded == manifest
+    assert loaded.items[0].candidate_findings[0].evidence[0].result == "unresolved"
+
+
+def test_render_run_report_summarizes_findings_and_verification(tmp_path: Path) -> None:
+    manifest = new_manifest(
+        run_id="run-123",
+        vault_path=tmp_path,
+        inputs=[],
+        options={},
+        items=[
+            ManifestItem(
+                video_id="abc123",
+                url="https://youtu.be/abc123",
+                title="A video",
+                position=0,
+                status="raw_written",
+                raw_path="raw/a-video.md",
+            ),
+            ManifestItem(
+                video_id="def456",
+                url="https://youtu.be/def456",
+                title="B video",
+                position=1,
+                status="failed",
+            ),
+        ],
+    )
+    manifest = add_candidate_finding(manifest, "abc123", claim="Claim.", transcript_span="cue:1")
+
+    report = render_run_report(manifest)
+
+    assert "run: run-123" in report
+    assert "raw_written: 1" in report
+    assert "failed: 1" in report
+    assert "candidate_findings: 1" in report
+    assert "verification_pending: 1" in report
+    assert "raw/a-video.md" in report
