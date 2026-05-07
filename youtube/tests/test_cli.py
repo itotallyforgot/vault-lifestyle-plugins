@@ -74,6 +74,38 @@ def test_captions_path_writes_raw_file(tmp_path: Path, monkeypatch) -> None:
     assert "caption text" in text
 
 
+def test_transcript_language_selects_non_english_captions(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    meta = _meta(captions=["fr"], caption_kinds={"fr": "manual"})
+    seen: dict[str, str | None] = {"lang": None}
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: meta)
+
+    def fetch_captions(url, lang="en"):
+        seen["lang"] = lang
+        return "texte de sous-titres"
+
+    def fail_if_called(*args, **kwargs):  # pragma: no cover - assertion helper
+        raise AssertionError("audio download should not run when requested captions exist")
+
+    monkeypatch.setattr(cli_module, "fetch_captions", fetch_captions)
+    monkeypatch.setattr(cli_module, "download_audio", fail_if_called)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "https://youtu.be/abc123",
+            "--vault",
+            str(vault),
+            "--transcript-language",
+            "fr",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen["lang"] == "fr"
+    assert "texte de sous-titres" in _raw_path(vault, meta).read_text()
+
+
 def test_whisper_path_writes_raw_file(tmp_path: Path, monkeypatch) -> None:
     vault = _vault(tmp_path)
     meta = _meta(captions=[], caption_kinds={})
@@ -326,6 +358,36 @@ def test_force_whisper_skips_caption_fetch(tmp_path: Path, monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert "whisper text" in _raw_path(vault, meta).read_text()
+
+
+def test_force_whisper_passes_transcript_language_hint(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    meta = _meta(captions=["fr"], caption_kinds={"fr": "manual"})
+    seen: dict[str, str | None] = {"language": None}
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: meta)
+    monkeypatch.setattr(cli_module, "download_audio", lambda url, dest_dir: dest_dir / "audio.m4a")
+
+    def transcribe(audio, model="base", language=None, verbose=False):
+        seen["language"] = language
+        return "texte whisper"
+
+    monkeypatch.setattr(cli_module, "transcribe_audio", transcribe)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "https://youtu.be/abc123",
+            "--vault",
+            str(vault),
+            "--force-whisper",
+            "--transcript-language",
+            "fr",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen["language"] == "fr"
+    assert "texte whisper" in _raw_path(vault, meta).read_text()
 
 
 def test_verbose_flag_passes_through_to_whisper(tmp_path: Path, monkeypatch) -> None:

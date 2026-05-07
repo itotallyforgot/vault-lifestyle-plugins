@@ -6,7 +6,8 @@ flow picks that raw file up later.
 
 The package prefers yt-dlp captions. When captions are unavailable or
 empty, it falls back to local Whisper. Use `--force-whisper` to skip
-captions.
+captions. Captions and Whisper language hinting default to English; pass
+`--transcript-language` to request another language.
 
 ## Install
 
@@ -40,6 +41,12 @@ Pass the vault path explicitly:
 uv --directory youtube run vault-yt "https://youtu.be/<id>" --vault /path/to/Second-Brain
 ```
 
+Request captions or Whisper transcripts in another language:
+
+```bash
+uv --directory youtube run vault-yt "https://youtu.be/<id>" --vault /path/to/Second-Brain --transcript-language fr
+```
+
 Or set `VAULT_PATH`:
 
 ```bash
@@ -65,12 +72,16 @@ vault-yt URL
   --force
   --force-whisper
   --whisper-model tiny|base|small
+  --transcript-language LANG
   --verbose
   --dry-run
 ```
 
 `--whisper-model` defaults to `VAULT_YT_WHISPER_MODEL`, then `base`.
 Models larger than `small` are rejected by design.
+
+`--transcript-language` defaults to `en`. The selected language is used
+for caption selection and as the Whisper language hint.
 
 `--dry-run` resolves the vault, fetches the transcript, builds the raw
 content, and prints the target path plus the start of the file without

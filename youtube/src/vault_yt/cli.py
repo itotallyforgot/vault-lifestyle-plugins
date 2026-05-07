@@ -73,6 +73,13 @@ def command(
             help="Whisper model: tiny, base, or small. Defaults to VAULT_YT_WHISPER_MODEL or base.",
         ),
     ] = None,
+    transcript_language: Annotated[
+        str,
+        typer.Option(
+            "--transcript-language",
+            help="Caption language and Whisper language hint. Defaults to en.",
+        ),
+    ] = "en",
     verbose: Annotated[
         bool,
         typer.Option("--verbose", help="Print per-step diagnostics."),
@@ -125,6 +132,7 @@ def command(
             meta,
             model=model,
             force_whisper=force_whisper,
+            transcript_language=transcript_language,
             verbose=verbose,
         )
     except ExtractorError as e:
@@ -171,13 +179,14 @@ def _resolve_transcript(
     *,
     model: str,
     force_whisper: bool,
+    transcript_language: str,
     verbose: bool,
 ) -> tuple[str, str]:
-    source = choose_transcript_source(meta, lang="en", force_whisper=force_whisper)
+    source = choose_transcript_source(meta, lang=transcript_language, force_whisper=force_whisper)
 
     if source == "captions":
         _debug(verbose, "fetching captions")
-        transcript = _with_network_retry(fetch_captions, url, "en", verbose=verbose)
+        transcript = _with_network_retry(fetch_captions, url, transcript_language, verbose=verbose)
         if transcript and transcript.strip():
             return transcript, "yt-dlp"
         _debug(verbose, "captions empty, falling back to whisper")
@@ -185,7 +194,12 @@ def _resolve_transcript(
     _debug(verbose, f"using whisper model {model}")
     with tempfile.TemporaryDirectory() as td:
         audio_path = _with_network_retry(download_audio, url, Path(td), verbose=verbose)
-        transcript = transcribe_audio(audio_path, model=model, language="en", verbose=verbose)
+        transcript = transcribe_audio(
+            audio_path,
+            model=model,
+            language=transcript_language,
+            verbose=verbose,
+        )
     return transcript, f"whisper-{model}"
 
 
