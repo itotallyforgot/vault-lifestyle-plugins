@@ -57,8 +57,11 @@ uv --directory youtube run vault-yt "https://youtu.be/<id>"
 The CLI writes:
 
 ```text
-<vault>/raw/<youtube-id>-<sanitized-title>.md
+<vault>/raw/<yyyy-mm-dd>-youtube-<youtube-id>-<sanitized-title>.md
 ```
+
+The date prefix uses YouTube's published date when available. If YouTube
+does not provide one, `vault-yt` falls back to the ingest date.
 
 Re-running the same URL is idempotent. If the matching raw file already
 exists, the command prints `existing: <path>` and exits without rewriting.
