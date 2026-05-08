@@ -92,6 +92,7 @@ vault-yt URL
   --url-file PATH
   --playlist URL
   --handoff PATH
+  --validate-handoff PATH
   --export-playlist URL
   --output PATH
   --browser BROWSER[+KEYRING][:PROFILE][::CONTAINER]
@@ -134,6 +135,16 @@ Then process it through the same staging manifest pipeline:
 uv --directory youtube run vault-yt --handoff engineering.jsonl --run-id engineering-001 --limit 5 --vault /path/to/Second-Brain
 ```
 
+Validate a handoff file without a vault:
+
+```bash
+uv --directory youtube run vault-yt --validate-handoff engineering.jsonl
+```
+
+The record schema is documented in
+`youtube/schemas/youtube_handoff.schema.json`, with a checked example in
+`youtube/examples/engineering-handoff.jsonl`.
+
 For local, explicit cookie/browser export, `vault-yt` can ask yt-dlp to resolve
 the playlist and write the handoff file without ingesting transcripts:
 
@@ -155,6 +166,9 @@ uv --directory youtube run vault-yt --export-playlist "https://www.youtube.com/p
 Treat browser cookies and cookie files as account secrets. Do not commit them,
 paste them into prompts, or store them in the vault. The handoff file contains
 private playlist membership metadata, but not auth credentials.
+
+For an end-to-end operator flow, see
+`docs/youtube-private-playlist-runbook.md`.
 
 Use `--run-id` to make the staging manifest name stable and `--resume` to
 continue a previous run. `--dry-run` expands the inputs and prints how many
@@ -200,6 +214,19 @@ ingested: false
 ingested_at: null
 wiki_page: null
 tags: [youtube]
+```
+
+Batch/handoff runs add provenance when available:
+
+```yaml
+youtube_video_id: "<id>"
+canonical_url: "https://youtu.be/<id>"
+bulk_run_id: "engineering-001"
+source_provider: youtube-mcp
+playlist_id: PL...
+playlist_title: Engineering
+playlist_url: "https://www.youtube.com/playlist?list=..."
+playlist_index: 1
 ```
 
 Whisper output uses `transcript_source: whisper-base`,

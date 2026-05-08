@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from vault_resolver import VaultPathError, resolve_vault_path
 
 from vault_yt.extractor import ExtractorError, download_audio, fetch_captions, fetch_meta
-from vault_yt.handoff import HandoffError, read_handoff
+from vault_yt.handoff import HandoffError, read_handoff, validate_handoff
 from vault_yt.inputs import InputExpansionError, WorkItem, expand_inputs
 from vault_yt.manifest import (
     ManifestError,
@@ -134,6 +134,10 @@ def command(
         Path | None,
         typer.Option("--handoff", help="JSONL handoff file containing playlist video work items."),
     ] = None,
+    validate_handoff_file: Annotated[
+        Path | None,
+        typer.Option("--validate-handoff", help="Validate handoff JSONL without ingesting."),
+    ] = None,
     export_playlist: Annotated[
         str | None,
         typer.Option(
@@ -221,6 +225,10 @@ def command(
 ) -> None:
     """Fetch a transcript and write `<vault>/raw/<slug>.md`."""
     _configure_logging(verbose)
+
+    if validate_handoff_file is not None:
+        _validate_handoff(validate_handoff_file)
+        raise typer.Exit(0)
 
     if export_playlist is not None:
         _export_playlist(
@@ -316,6 +324,7 @@ def _ingest_url(
     transcript_language: str,
     verbose: bool,
     dry_run: bool,
+    extra_frontmatter: Mapping[str, Any] | None = None,
 ) -> IngestOutcome:
     if not _looks_like_url(url):
         _fail(2, f"malformed url: {url}")
@@ -368,7 +377,12 @@ def _ingest_url(
         _fail(8, f"empty transcript from {transcript_source}")
 
     try:
-        content = build_raw_md(meta, transcript, transcript_source=transcript_source)
+        content = build_raw_md(
+            meta,
+            transcript,
+            transcript_source=transcript_source,
+            extra_frontmatter=extra_frontmatter,
+        )
     except (WriterError, ValidationError) as e:
         _fail(10, f"frontmatter validation bug: {e}")
 
@@ -474,6 +488,7 @@ def _run_batch(
                 transcript_language=transcript_language,
                 verbose=verbose,
                 dry_run=False,
+                extra_frontmatter=_raw_provenance(item, run_id=manifest.run_id),
             )
         except typer.Exit as e:
             failed += 1
@@ -743,6 +758,17 @@ def _export_playlist(
     typer.echo(f"handoff written: {written}")
 
 
+def _validate_handoff(path: Path) -> None:
+    result = validate_handoff(path)
+    if result.valid:
+        typer.echo(f"handoff valid: {path} ({result.record_count} records)")
+        return
+    typer.echo(f"handoff invalid: {path}", err=True)
+    for error in result.errors:
+        typer.echo(f"- {error.path}:{error.line_number}: {error.message}", err=True)
+    raise typer.Exit(2)
+
+
 def _work_input(value: str | Path) -> WorkInput:
     if isinstance(value, Path):
         return WorkInput(kind="url_file", ref=str(value))
@@ -750,13 +776,64 @@ def _work_input(value: str | Path) -> WorkInput:
 
 
 def _manifest_item(position: int, item: WorkItem) -> ManifestItem:
+    provenance = _manifest_provenance(item)
     return ManifestItem(
         video_id=item.video_id,
         url=item.url,
         title=item.title,
         position=position,
         source_url=item.url,
+        source_provider=provenance.get("source_provider"),
+        playlist_id=provenance.get("playlist_id"),
+        playlist_title=provenance.get("playlist_title"),
+        playlist_url=provenance.get("playlist_url"),
+        playlist_index=provenance.get("playlist_index"),
+        appearances=_appearances_json(item),
     )
+
+
+def _manifest_provenance(item: WorkItem) -> dict[str, Any]:
+    first = item.appearances[0] if item.appearances else None
+    if first is None:
+        return {}
+    return {
+        "source_provider": first.source_provider,
+        "playlist_id": first.playlist_id,
+        "playlist_title": first.playlist_title,
+        "playlist_url": first.playlist_url,
+        "playlist_index": first.playlist_index,
+    }
+
+
+def _raw_provenance(item: ManifestItem, *, run_id: str) -> dict[str, Any]:
+    return {
+        "youtube_video_id": item.video_id,
+        "canonical_url": item.url,
+        "bulk_run_id": run_id,
+        "source_provider": item.source_provider,
+        "playlist_id": item.playlist_id,
+        "playlist_title": item.playlist_title,
+        "playlist_url": item.playlist_url,
+        "playlist_index": item.playlist_index,
+    }
+
+
+def _appearances_json(item: WorkItem) -> list[dict[str, Any]]:
+    appearances: list[dict[str, Any]] = []
+    for appearance in item.appearances:
+        raw = {
+            "kind": appearance.kind,
+            "source": appearance.source,
+            "url": appearance.url,
+            "line_number": appearance.line_number,
+            "playlist_id": appearance.playlist_id,
+            "playlist_title": appearance.playlist_title,
+            "playlist_url": appearance.playlist_url,
+            "playlist_index": appearance.playlist_index,
+            "source_provider": appearance.source_provider,
+        }
+        appearances.append({key: value for key, value in raw.items() if value is not None})
+    return appearances
 
 
 def _dedupe_work_items(items: list[WorkItem]) -> list[WorkItem]:

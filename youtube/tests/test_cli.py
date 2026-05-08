@@ -469,8 +469,10 @@ def test_handoff_batch_processes_items_and_preserves_discovered_titles(
     vault = _vault(tmp_path)
     handoff = tmp_path / "engineering.jsonl"
     handoff.write_text(
-        '{"video_id":"abc123","title":"Handoff Alpha","source_provider":"youtube-mcp"}\n'
-        '{"video_id":"def456","title":"Handoff Beta","source_provider":"youtube-mcp"}\n',
+        '{"video_id":"abc123","title":"Handoff Alpha","source_provider":"youtube-mcp",'
+        '"playlist_id":"PLENG","playlist_title":"Engineering","playlist_url":"https://youtube.com/playlist?list=PLENG","playlist_index":1}\n'
+        '{"video_id":"def456","title":"Handoff Beta","source_provider":"youtube-mcp",'
+        '"playlist_id":"PLENG","playlist_title":"Engineering","playlist_url":"https://youtube.com/playlist?list=PLENG","playlist_index":2}\n',
         encoding="utf-8",
     )
     metas = {
@@ -499,8 +501,23 @@ def test_handoff_batch_processes_items_and_preserves_discovered_titles(
     assert manifest.inputs[0].kind == "handoff"
     assert [item.video_id for item in manifest.items] == ["abc123", "def456"]
     assert manifest.items[0].title == "Fetched Alpha"
+    assert manifest.items[0].source_provider == "youtube-mcp"
+    assert manifest.items[0].playlist_id == "PLENG"
+    assert manifest.items[0].playlist_title == "Engineering"
+    assert manifest.items[0].playlist_url == "https://youtube.com/playlist?list=PLENG"
+    assert manifest.items[0].playlist_index == 1
+    assert manifest.items[0].appearances[0]["source_provider"] == "youtube-mcp"
     assert manifest.items[1].title == "Handoff Beta"
     assert manifest.items[1].status == "pending"
+
+    raw_text = (vault / manifest.items[0].raw_path).read_text()
+    assert "youtube_video_id: abc123" in raw_text
+    assert "canonical_url: https://youtu.be/abc123" in raw_text
+    assert "bulk_run_id: run-123" in raw_text
+    assert "source_provider: youtube-mcp" in raw_text
+    assert "playlist_id: PLENG" in raw_text
+    assert "playlist_title: Engineering" in raw_text
+    assert "playlist_index: 1" in raw_text
 
 
 def test_batch_dedupes_across_url_file_and_handoff(tmp_path: Path, monkeypatch) -> None:
@@ -605,6 +622,30 @@ def test_export_playlist_does_not_require_vault(tmp_path: Path, monkeypatch) -> 
 
     assert result.exit_code == 0
     assert f"handoff written: {output}" in result.output
+
+
+def test_validate_handoff_does_not_require_vault(tmp_path: Path, monkeypatch) -> None:
+    handoff = tmp_path / "engineering.jsonl"
+    handoff.write_text('{"video_id":"abc123","title":"Alpha"}\n', encoding="utf-8")
+    monkeypatch.delenv("VAULT_PATH", raising=False)
+
+    result = runner.invoke(cli_module.app, ["--validate-handoff", str(handoff)])
+
+    assert result.exit_code == 0
+    assert "handoff valid:" in result.output
+    assert "1 records" in result.output
+
+
+def test_validate_handoff_reports_errors_without_vault(tmp_path: Path, monkeypatch) -> None:
+    handoff = tmp_path / "bad.jsonl"
+    handoff.write_text('{"title":"No ID"}\n', encoding="utf-8")
+    monkeypatch.delenv("VAULT_PATH", raising=False)
+
+    result = runner.invoke(cli_module.app, ["--validate-handoff", str(handoff)])
+
+    assert result.exit_code == 2
+    assert "handoff invalid:" in result.output
+    assert "bad.jsonl:1" in result.output
 
 
 def test_batch_resume_skips_completed_manifest_items(tmp_path: Path, monkeypatch) -> None:
