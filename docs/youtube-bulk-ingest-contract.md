@@ -21,9 +21,10 @@ final knowledge synthesis and `wiki/` writes.
 - Single video URL.
 - Playlist URL.
 - Text file containing one URL per line.
+- External handoff JSONL file containing pre-resolved video work items.
 
-URL files may include blank lines and comment lines starting with `#`.
-Malformed entries must be reported with line numbers.
+URL files and handoff files may include blank lines and comment lines starting
+with `#`. Malformed entries must be reported with line numbers.
 
 Duplicate videos are collapsed by YouTube video ID. First-seen order wins.
 Additional appearances should be preserved as provenance when practical.
@@ -38,6 +39,8 @@ Each resolved video work item should include:
 - `position`: first-seen zero-based position in the resolved run.
 - `input_kind`: `video`, `playlist`, or `url_file`.
 - `input_ref`: original URL or file path.
+- `source_provider`: optional external resolver, such as `youtube-mcp`,
+  `yt-dlp-browser`, or `yt-dlp-cookies`.
 - `playlist_id`: optional playlist ID.
 - `playlist_title`: optional playlist title.
 - `playlist_url`: optional playlist URL.
@@ -140,6 +143,47 @@ when available, using a stable line format:
 
 Plain transcript output remains valid for single-video ingest.
 
+## External Handoff JSONL
+
+Authenticated playlist access should be isolated from the core ingest pipeline.
+External tools may hand `vault-yt` newline-delimited JSON records with no
+credentials:
+
+```jsonl
+{"video_id":"abc123","url":"https://youtu.be/abc123","title":"Example","source_provider":"youtube-mcp","playlist_title":"Engineering","playlist_index":1}
+```
+
+Supported record fields:
+
+- `video_id`: YouTube video ID. Required unless `url` is a parseable YouTube
+  video URL.
+- `url`: canonical or original video URL.
+- `title`: optional title from the external resolver.
+- `source_provider`: resolver name, for example `youtube-mcp`,
+  `yt-dlp-browser`, or `yt-dlp-cookies`.
+- `playlist_id`.
+- `playlist_title`.
+- `playlist_url`.
+- `playlist_index`.
+- `channel`.
+- `channel_url`.
+
+The handoff file is sensitive because it can reveal private playlist
+membership, but it must not contain OAuth tokens, browser cookies, API keys, or
+refresh tokens.
+
+## Cookie/Browser Export Boundary
+
+`vault-yt --export-playlist` is an explicit local exporter that uses yt-dlp to
+write handoff JSONL. It may use either:
+
+- `--browser BROWSER[+KEYRING][:PROFILE][::CONTAINER]`
+- `--cookies /path/to/cookies.txt`
+
+This command resolves playlist membership only. It does not write raw pages,
+create findings, or store credentials in manifests. Browser cookies and cookie
+files are account secrets and must stay outside git and vault content.
+
 ## Candidate Findings Handoff
 
 Candidate findings are not final knowledge. A candidate finding should include:
@@ -208,7 +252,7 @@ No manifest is required for the existing single-video command.
 ## Example: URL File Parcel
 
 ```text
-vault-yt batch --url-file engineering.txt --limit 5 --vault ~/Vault
+vault-yt --url-file engineering.txt --limit 5 --vault ~/Vault
 ```
 
 Creates or resumes a staging manifest, processes up to five pending videos,
@@ -217,8 +261,25 @@ writes raw pages, and records per-item status.
 ## Example: Playlist Parcel
 
 ```text
-vault-yt batch --playlist "https://www.youtube.com/playlist?list=..." --limit 3 --vault ~/Vault
+vault-yt --playlist "https://www.youtube.com/playlist?list=..." --limit 3 --vault ~/Vault
 ```
 
 Expands playlist entries, collapses duplicates by video ID, processes three
 pending items, and records playlist provenance for each raw page.
+
+## Example: External Handoff Parcel
+
+```text
+vault-yt --handoff engineering.jsonl --run-id engineering-001 --limit 5 --vault ~/Vault
+```
+
+Consumes a pre-resolved handoff file from an MCP, CLI, or browser-cookie
+exporter and processes pending videos through the normal staging manifest.
+
+## Example: Cookie/Browser Export
+
+```text
+vault-yt --export-playlist "https://www.youtube.com/playlist?list=..." --browser "firefox" --output engineering.jsonl
+```
+
+Writes `engineering.jsonl` as handoff data. A later `--handoff` run ingests it.

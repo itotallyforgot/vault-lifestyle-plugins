@@ -463,6 +463,150 @@ def test_url_file_batch_processes_limited_items_and_writes_manifest(
     assert (vault / manifest.items[0].raw_path).exists()
 
 
+def test_handoff_batch_processes_items_and_preserves_discovered_titles(
+    tmp_path: Path, monkeypatch
+) -> None:
+    vault = _vault(tmp_path)
+    handoff = tmp_path / "engineering.jsonl"
+    handoff.write_text(
+        '{"video_id":"abc123","title":"Handoff Alpha","source_provider":"youtube-mcp"}\n'
+        '{"video_id":"def456","title":"Handoff Beta","source_provider":"youtube-mcp"}\n',
+        encoding="utf-8",
+    )
+    metas = {
+        "https://youtu.be/abc123": _meta(id="abc123", title="Fetched Alpha"),
+        "https://youtu.be/def456": _meta(id="def456", title="Fetched Beta"),
+    }
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: metas[url])
+    monkeypatch.setattr(cli_module, "fetch_captions", lambda url, lang="en": f"caption for {url}")
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--handoff",
+            str(handoff),
+            "--limit",
+            "1",
+            "--run-id",
+            "run-123",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    manifest = load_manifest(default_manifest_path(vault, "run-123"))
+    assert result.exit_code == 0
+    assert manifest.inputs[0].kind == "handoff"
+    assert [item.video_id for item in manifest.items] == ["abc123", "def456"]
+    assert manifest.items[0].title == "Fetched Alpha"
+    assert manifest.items[1].title == "Handoff Beta"
+    assert manifest.items[1].status == "pending"
+
+
+def test_batch_dedupes_across_url_file_and_handoff(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    url_file = tmp_path / "urls.txt"
+    url_file.write_text("https://youtu.be/abc123\n", encoding="utf-8")
+    handoff = tmp_path / "engineering.jsonl"
+    handoff.write_text(
+        '{"video_id":"abc123","title":"Handoff Alpha","source_provider":"youtube-mcp"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: _meta(id="abc123", title="Alpha"))
+    monkeypatch.setattr(cli_module, "fetch_captions", lambda url, lang="en": "caption")
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--url-file",
+            str(url_file),
+            "--handoff",
+            str(handoff),
+            "--run-id",
+            "run-123",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    manifest = load_manifest(default_manifest_path(vault, "run-123"))
+    assert result.exit_code == 0
+    assert [item.video_id for item in manifest.items] == ["abc123"]
+    assert manifest.summary == {"raw_written": 1}
+
+
+def test_export_playlist_writes_handoff_without_ingesting(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    output = tmp_path / "engineering.jsonl"
+    seen: dict[str, object] = {}
+
+    def export_playlist_handoff(
+        playlist_url, output_path, *, browser=None, cookies=None, verbose=False
+    ):
+        seen["playlist_url"] = playlist_url
+        seen["output_path"] = output_path
+        seen["browser"] = browser
+        seen["cookies"] = cookies
+        seen["verbose"] = verbose
+        output_path.write_text('{"video_id":"abc123"}\n', encoding="utf-8")
+        return output_path
+
+    monkeypatch.setattr(cli_module, "export_playlist_handoff", export_playlist_handoff)
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: (_ for _ in ()).throw(AssertionError))
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--export-playlist",
+            "https://www.youtube.com/playlist?list=PLENG",
+            "--browser",
+            "firefox:default",
+            "--output",
+            str(output),
+            "--vault",
+            str(vault),
+            "--verbose",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert f"handoff written: {output}" in result.output
+    assert seen == {
+        "playlist_url": "https://www.youtube.com/playlist?list=PLENG",
+        "output_path": output,
+        "browser": "firefox:default",
+        "cookies": None,
+        "verbose": True,
+    }
+    assert output.exists()
+
+
+def test_export_playlist_does_not_require_vault(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "engineering.jsonl"
+
+    def export_playlist_handoff(
+        playlist_url, output_path, *, browser=None, cookies=None, verbose=False
+    ):
+        output_path.write_text('{"video_id":"abc123"}\n', encoding="utf-8")
+        return output_path
+
+    monkeypatch.delenv("VAULT_PATH", raising=False)
+    monkeypatch.setattr(cli_module, "export_playlist_handoff", export_playlist_handoff)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--export-playlist",
+            "https://www.youtube.com/playlist?list=PLENG",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert f"handoff written: {output}" in result.output
+
+
 def test_batch_resume_skips_completed_manifest_items(tmp_path: Path, monkeypatch) -> None:
     vault = _vault(tmp_path)
     url_file = tmp_path / "urls.txt"

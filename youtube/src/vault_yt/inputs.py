@@ -26,6 +26,7 @@ class InputAppearance:
     playlist_title: str | None = None
     playlist_url: str | None = None
     playlist_index: int | None = None
+    source_provider: str | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class WorkItem:
     video_id: str
     url: str
     appearances: tuple[InputAppearance, ...]
+    title: str | None = None
 
 
 class InputExpansionError(ValueError):
@@ -81,17 +83,36 @@ def expand_inputs(input_values: Iterable[str | Path]) -> list[WorkItem]:
     return state.items()
 
 
+def parse_video_id(url: str) -> str:
+    """Return a YouTube video ID from a supported video URL."""
+    parsed = _parse_youtube_input(url)
+    if parsed.video_id is None:
+        raise InputExpansionError(f"unsupported YouTube video input: {url}")
+    return parsed.video_id
+
+
 class _ExpansionState:
     def __init__(self) -> None:
         self._order: list[str] = []
         self._urls: dict[str, str] = {}
         self._appearances: dict[str, list[InputAppearance]] = {}
+        self._titles: dict[str, str | None] = {}
 
-    def add(self, video_id: str, url: str, appearance: InputAppearance) -> None:
+    def add(
+        self,
+        video_id: str,
+        url: str,
+        appearance: InputAppearance,
+        *,
+        title: str | None = None,
+    ) -> None:
         if video_id not in self._appearances:
             self._order.append(video_id)
             self._urls[video_id] = url
             self._appearances[video_id] = []
+            self._titles[video_id] = title
+        elif self._titles[video_id] is None and title is not None:
+            self._titles[video_id] = title
         self._appearances[video_id].append(appearance)
 
     def items(self) -> list[WorkItem]:
@@ -100,6 +121,7 @@ class _ExpansionState:
                 video_id=video_id,
                 url=self._urls[video_id],
                 appearances=tuple(self._appearances[video_id]),
+                title=self._titles[video_id],
             )
             for video_id in self._order
         ]

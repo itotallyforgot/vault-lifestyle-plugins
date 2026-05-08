@@ -36,7 +36,7 @@ VerificationState = Literal[
     "blocked",
 ]
 
-InputKind = Literal["video", "playlist", "url_file"]
+InputKind = Literal["video", "playlist", "url_file", "handoff"]
 VerificationResult = Literal["accepted", "rejected", "unresolved", "conflicting"]
 FindingVerificationStatus = Literal["pending", "accepted", "rejected", "unresolved", "conflicting"]
 
