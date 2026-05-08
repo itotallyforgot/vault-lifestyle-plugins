@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from vault_resolver import VaultPathError, resolve_vault_path
 
 from vault_yt.extractor import ExtractorError, download_audio, fetch_captions, fetch_meta
+from vault_yt.handoff import HandoffError, read_handoff
 from vault_yt.inputs import InputExpansionError, WorkItem, expand_inputs
 from vault_yt.manifest import (
     ManifestError,
@@ -46,6 +47,7 @@ from vault_yt.whisper_fallback import (
     transcribe_audio,
 )
 from vault_yt.writer import WriterError, build_raw_md, write
+from vault_yt.ytdlp_playlist_exporter import BrowserSpecError, export_playlist_handoff
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +130,31 @@ def command(
         str | None,
         typer.Option("--playlist", help="YouTube playlist URL to ingest as a batch."),
     ] = None,
+    handoff: Annotated[
+        Path | None,
+        typer.Option("--handoff", help="JSONL handoff file containing playlist video work items."),
+    ] = None,
+    export_playlist: Annotated[
+        str | None,
+        typer.Option(
+            "--export-playlist", help="Export a playlist to handoff JSONL without ingesting."
+        ),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Output path for --export-playlist handoff JSONL."),
+    ] = None,
+    browser: Annotated[
+        str | None,
+        typer.Option(
+            "--browser",
+            help="yt-dlp browser cookie spec: BROWSER[+KEYRING][:PROFILE][::CONTAINER].",
+        ),
+    ] = None,
+    cookies: Annotated[
+        Path | None,
+        typer.Option("--cookies", help="Netscape-format cookie file for --export-playlist."),
+    ] = None,
     limit: Annotated[
         int | None,
         typer.Option("--limit", min=1, help="Maximum pending videos to process this run."),
@@ -195,6 +222,16 @@ def command(
     """Fetch a transcript and write `<vault>/raw/<slug>.md`."""
     _configure_logging(verbose)
 
+    if export_playlist is not None:
+        _export_playlist(
+            playlist_url=export_playlist,
+            output=output,
+            browser=browser,
+            cookies=cookies,
+            verbose=verbose,
+        )
+        raise typer.Exit(0)
+
     try:
         vault_path = resolve_vault_path(vault)
     except VaultPathError as e:
@@ -236,9 +273,11 @@ def command(
         raise typer.Exit(0)
 
     batch_inputs = _batch_inputs(url_file=url_file, playlist=playlist)
-    if batch_inputs:
+    handoff_inputs = _handoff_inputs(handoff=handoff)
+    if batch_inputs or handoff_inputs:
         _run_batch(
             batch_inputs,
+            handoff_inputs=handoff_inputs,
             vault_path=vault_path,
             force=force,
             force_whisper=force_whisper,
@@ -367,6 +406,7 @@ def _ingest_url(
 def _run_batch(
     inputs: list[str | Path],
     *,
+    handoff_inputs: list[Path],
     vault_path: Path,
     force: bool,
     force_whisper: bool,
@@ -380,8 +420,13 @@ def _run_batch(
 ) -> None:
     try:
         work_items = expand_inputs(inputs)
+        for handoff_path in handoff_inputs:
+            work_items.extend(read_handoff(handoff_path))
+        work_items = _dedupe_work_items(work_items)
     except InputExpansionError as e:
         _fail(2, f"input expansion error: {e}")
+    except HandoffError as e:
+        _fail(2, f"handoff error: {e}")
 
     selected_run_id = run_id or _default_run_id()
     manifest_path = default_manifest_path(vault_path, selected_run_id)
@@ -397,7 +442,8 @@ def _run_batch(
         manifest = new_manifest(
             run_id=selected_run_id,
             vault_path=vault_path,
-            inputs=[_work_input(value) for value in inputs],
+            inputs=[_work_input(value) for value in inputs]
+            + [WorkInput(kind="handoff", ref=str(value)) for value in handoff_inputs],
             options={
                 "force": force,
                 "force_whisper": force_whisper,
@@ -670,6 +716,33 @@ def _batch_inputs(*, url_file: Path | None, playlist: str | None) -> list[str | 
     return values
 
 
+def _handoff_inputs(*, handoff: Path | None) -> list[Path]:
+    return [handoff] if handoff is not None else []
+
+
+def _export_playlist(
+    *,
+    playlist_url: str,
+    output: Path | None,
+    browser: str | None,
+    cookies: Path | None,
+    verbose: bool,
+) -> None:
+    if output is None:
+        _fail(2, "--output is required with --export-playlist")
+    try:
+        written = export_playlist_handoff(
+            playlist_url,
+            output,
+            browser=browser,
+            cookies=cookies,
+            verbose=verbose,
+        )
+    except BrowserSpecError as e:
+        _fail(2, f"browser cookie error: {e}")
+    typer.echo(f"handoff written: {written}")
+
+
 def _work_input(value: str | Path) -> WorkInput:
     if isinstance(value, Path):
         return WorkInput(kind="url_file", ref=str(value))
@@ -680,10 +753,28 @@ def _manifest_item(position: int, item: WorkItem) -> ManifestItem:
     return ManifestItem(
         video_id=item.video_id,
         url=item.url,
-        title=None,
+        title=item.title,
         position=position,
         source_url=item.url,
     )
+
+
+def _dedupe_work_items(items: list[WorkItem]) -> list[WorkItem]:
+    order: list[str] = []
+    by_id: dict[str, WorkItem] = {}
+    for item in items:
+        existing = by_id.get(item.video_id)
+        if existing is None:
+            order.append(item.video_id)
+            by_id[item.video_id] = item
+            continue
+        by_id[item.video_id] = WorkItem(
+            video_id=existing.video_id,
+            url=existing.url,
+            appearances=existing.appearances + item.appearances,
+            title=existing.title or item.title,
+        )
+    return [by_id[video_id] for video_id in order]
 
 
 def _default_run_id() -> str:

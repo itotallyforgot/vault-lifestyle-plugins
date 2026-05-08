@@ -91,6 +91,11 @@ vault-yt URL
   --dry-run
   --url-file PATH
   --playlist URL
+  --handoff PATH
+  --export-playlist URL
+  --output PATH
+  --browser BROWSER[+KEYRING][:PROFILE][::CONTAINER]
+  --cookies PATH
   --limit N
   --run-id ID
   --resume
@@ -113,6 +118,43 @@ For batch parcels, omit the positional `URL` and pass `--url-file` or
 uv --directory youtube run vault-yt --url-file engineering.txt --limit 5 --vault /path/to/Second-Brain
 uv --directory youtube run vault-yt --playlist "https://www.youtube.com/playlist?list=<id>" --limit 3 --vault /path/to/Second-Brain
 ```
+
+Authenticated/private playlist access should stay outside the core ingest path.
+Use an external handoff JSONL file when another trusted tool, MCP, CLI, or
+browser-cookie exporter has already resolved the playlist into video work
+items:
+
+```jsonl
+{"video_id":"abc123","url":"https://youtu.be/abc123","title":"Example","source_provider":"youtube-mcp","playlist_title":"Engineering","playlist_index":1}
+```
+
+Then process it through the same staging manifest pipeline:
+
+```bash
+uv --directory youtube run vault-yt --handoff engineering.jsonl --run-id engineering-001 --limit 5 --vault /path/to/Second-Brain
+```
+
+For local, explicit cookie/browser export, `vault-yt` can ask yt-dlp to resolve
+the playlist and write the handoff file without ingesting transcripts:
+
+```bash
+uv --directory youtube run vault-yt --export-playlist "https://www.youtube.com/playlist?list=<id>" \
+  --browser "firefox" --output engineering.jsonl
+```
+
+`--browser` accepts yt-dlp-style browser specs:
+`BROWSER[+KEYRING][:PROFILE][::CONTAINER]`, such as `firefox`,
+`chrome:Default`, or `brave:Profile 1::youtube`. You can also pass a
+Netscape-format cookie file:
+
+```bash
+uv --directory youtube run vault-yt --export-playlist "https://www.youtube.com/playlist?list=<id>" \
+  --cookies /path/to/cookies.txt --output engineering.jsonl
+```
+
+Treat browser cookies and cookie files as account secrets. Do not commit them,
+paste them into prompts, or store them in the vault. The handoff file contains
+private playlist membership metadata, but not auth credentials.
 
 Use `--run-id` to make the staging manifest name stable and `--resume` to
 continue a previous run. `--dry-run` expands the inputs and prints how many
