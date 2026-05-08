@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/itotallyforgot/vault-lifestyle-plugins/youtube/schemas/youtube_handoff.schema.json",
+  "title": "vault-yt external handoff record",
+  "description": "One newline-delimited JSON record for an externally resolved YouTube video work item. Handoff files must not contain auth credentials.",
+  "type": "object",
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "required": ["video_id"]
+    },
+    {
+      "required": ["url"]
+    }
+  ],
+  "properties": {
+    "video_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "YouTube video ID."
+    },
+    "url": {
+      "type": "string",
+      "pattern": "^https?://",
+      "description": "Canonical or source YouTube video URL."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_provider": {
+      "type": "string",
+      "minLength": 1,
+      "description": "External resolver name, such as youtube-mcp, yt-dlp-browser, yt-dlp-cookies, or manual-export."
+    },
+    "playlist_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "playlist_title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "playlist_url": {
+      "type": "string",
+      "pattern": "^https?://"
+    },
+    "playlist_index": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "channel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "channel_url": {
+      "type": "string",
+      "pattern": "^https?://"
+    }
+  }
+}

@@ -35,6 +35,7 @@ def build_raw_md(
     transcript_source: str,
     *,
     clipped_at: datetime | None = None,
+    extra_frontmatter: Mapping[str, Any] | None = None,
 ) -> str:
     """Compose a full `raw/<slug>.md` payload (frontmatter + body).
 
@@ -78,6 +79,8 @@ def build_raw_md(
         transcript_source=transcript_source,
         clipped_at=clipped_at or datetime.now(UTC),
     )
+    if extra_frontmatter:
+        fm.update({key: value for key, value in extra_frontmatter.items() if value is not None})
 
     return build_raw_markdown(fm, transcript)
 

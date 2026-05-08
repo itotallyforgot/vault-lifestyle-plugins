@@ -47,6 +47,9 @@ Each resolved video work item should include:
 - `playlist_index`: optional item index within the playlist.
 - `also_seen`: optional list of later duplicate appearances.
 
+Current implementation stores first-seen provenance on manifest items and keeps
+all appearances as structured item metadata.
+
 ## Staging Manifest
 
 Bulk runs write a manifest under a staging area, outside `wiki/`.
@@ -96,6 +99,12 @@ Per-item fields:
 - `attempts`.
 - `started_at`.
 - `finished_at`.
+- `source_provider`.
+- `playlist_id`.
+- `playlist_title`.
+- `playlist_url`.
+- `playlist_index`.
+- `appearances`: all known input appearances for this video.
 
 Per-item `status` values:
 
@@ -167,6 +176,18 @@ Supported record fields:
 - `playlist_index`.
 - `channel`.
 - `channel_url`.
+
+The JSON Schema lives at:
+
+```text
+youtube/schemas/youtube_handoff.schema.json
+```
+
+Validate a handoff file before ingesting:
+
+```text
+vault-yt --validate-handoff engineering.jsonl
+```
 
 The handoff file is sensitive because it can reveal private playlist
 membership, but it must not contain OAuth tokens, browser cookies, API keys, or
