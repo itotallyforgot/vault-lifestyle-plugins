@@ -9,6 +9,20 @@ from typing import Any
 
 from vault_yt.inputs import InputAppearance, InputExpansionError, WorkItem, parse_video_id
 
+_STRING_FIELDS = {
+    "video_id",
+    "url",
+    "title",
+    "source_provider",
+    "playlist_id",
+    "playlist_title",
+    "playlist_url",
+    "channel",
+    "channel_url",
+}
+_INT_FIELDS = {"playlist_index"}
+_ALLOWED_FIELDS = _STRING_FIELDS | _INT_FIELDS
+
 
 @dataclass(frozen=True)
 class HandoffError(ValueError):
@@ -20,6 +34,28 @@ class HandoffError(ValueError):
 
     def __str__(self) -> str:
         return self.message
+
+
+@dataclass(frozen=True)
+class HandoffValidationError:
+    """Line-specific validation error for one handoff record."""
+
+    message: str
+    path: Path
+    line_number: int
+
+
+@dataclass(frozen=True)
+class HandoffValidationResult:
+    """Validation result for a handoff JSONL file."""
+
+    path: Path
+    record_count: int
+    errors: list[HandoffValidationError]
+
+    @property
+    def valid(self) -> bool:
+        return not self.errors
 
 
 @dataclass(frozen=True)
@@ -53,6 +89,32 @@ def read_handoff(path: Path) -> list[WorkItem]:
         record = _parse_line(line, path=path, line_number=line_number)
         state.add(record, path=path, line_number=line_number)
     return state.items()
+
+
+def validate_handoff(path: Path) -> HandoffValidationResult:
+    """Validate handoff JSONL and collect line-numbered errors."""
+    errors: list[HandoffValidationError] = []
+    record_count = 0
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        return HandoffValidationResult(
+            path=path,
+            record_count=0,
+            errors=[HandoffValidationError(str(e), path, 0)],
+        )
+
+    for line_number, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            _parse_line(line, path=path, line_number=line_number)
+        except HandoffError as e:
+            errors.append(HandoffValidationError(str(e), path, line_number))
+            continue
+        record_count += 1
+    return HandoffValidationResult(path=path, record_count=record_count, errors=errors)
 
 
 def write_handoff(path: Path, records: list[HandoffRecord]) -> Path:
@@ -123,6 +185,7 @@ def _parse_line(line: str, *, path: Path, line_number: int) -> HandoffRecord:
             path=path,
             line_number=line_number,
         )
+    _validate_shape(raw, path=path, line_number=line_number)
 
     video_id = _string_or_none(raw.get("video_id"))
     url = _string_or_none(raw.get("url"))
@@ -158,6 +221,34 @@ def _parse_line(line: str, *, path: Path, line_number: int) -> HandoffRecord:
 
 def _record_to_json(record: HandoffRecord) -> dict[str, Any]:
     return {key: value for key, value in record.__dict__.items() if value is not None}
+
+
+def _validate_shape(raw: dict[str, Any], *, path: Path, line_number: int) -> None:
+    for key, value in raw.items():
+        if key not in _ALLOWED_FIELDS:
+            raise HandoffError(
+                f"unknown handoff field at {path}:{line_number}: {key}",
+                path=path,
+                line_number=line_number,
+            )
+        if key in _STRING_FIELDS and not isinstance(value, str):
+            raise HandoffError(
+                f"{key} must be a string at {path}:{line_number}",
+                path=path,
+                line_number=line_number,
+            )
+        if key in _INT_FIELDS and not isinstance(value, int):
+            raise HandoffError(
+                f"{key} must be an integer at {path}:{line_number}",
+                path=path,
+                line_number=line_number,
+            )
+        if key == "playlist_index" and isinstance(value, int) and value < 1:
+            raise HandoffError(
+                f"playlist_index must be >= 1 at {path}:{line_number}",
+                path=path,
+                line_number=line_number,
+            )
 
 
 def _string_or_none(value: object) -> str | None:

@@ -96,6 +96,12 @@ class ManifestItem:
     status: ItemStatus = "pending"
     raw_path: str | None = None
     source_url: str | None = None
+    source_provider: str | None = None
+    playlist_id: str | None = None
+    playlist_title: str | None = None
+    playlist_url: str | None = None
+    playlist_index: int | None = None
+    appearances: list[dict[str, Any]] = field(default_factory=list)
     transcript_source: str | None = None
     transcript_language: str | None = None
     candidate_findings_state: CandidateFindingsState = "not_requested"
