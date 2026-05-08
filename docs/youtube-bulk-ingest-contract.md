@@ -193,6 +193,9 @@ The handoff file is sensitive because it can reveal private playlist
 membership, but it must not contain OAuth tokens, browser cookies, API keys, or
 refresh tokens.
 
+For MCP servers, local CLIs, browser exporters, and manual scripts that produce
+handoff files, see `docs/youtube-handoff-adapter-contract.md`.
+
 ## Cookie/Browser Export Boundary
 
 `vault-yt --export-playlist` is an explicit local exporter that uses yt-dlp to
