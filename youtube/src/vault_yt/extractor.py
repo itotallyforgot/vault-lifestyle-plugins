@@ -274,7 +274,7 @@ def _fetch_caption_vtt(url: str, lang: str) -> str | None:
 def _duration_filter(info_dict: dict[str, Any]) -> str | None:
     """yt-dlp `match_filter` callable. Returns a reject reason or None."""
     duration = info_dict.get("duration")
-    if isinstance(duration, (int, float)) and duration > MAX_VIDEO_DURATION_SECONDS:
+    if isinstance(duration, int | float) and duration > MAX_VIDEO_DURATION_SECONDS:
         return (
             f"video too long ({int(duration)}s > {MAX_VIDEO_DURATION_SECONDS}s cap); "
             "livestreams not supported"
