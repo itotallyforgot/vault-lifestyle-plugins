@@ -35,6 +35,8 @@ A monorepo of independently-shippable plug-ins that overlay onto a markdown-vaul
 
 Pick the integrations you want. Each has its own install / config story documented in its subdirectory's README. The umbrella has no top-level install; just `git clone` to get the source.
 
+If you're contributing, run `pre-commit install` after cloning so gitleaks + ruff run on every local commit — see [CONTRIBUTING.md → Local setup](CONTRIBUTING.md#local-setup).
+
 ## Architecture
 
 ```

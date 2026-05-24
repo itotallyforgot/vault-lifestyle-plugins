@@ -28,6 +28,30 @@ Conventions for working on `vault-lifestyle-plugins`.
 
 8. **Release.** Append a `release` block to `activity-log.md` when your slice merges.
 
+## Local setup
+
+### Set up pre-commit hooks (required)
+
+This repo enforces secret scanning (gitleaks), formatting (ruff-format), and lint (ruff) in CI. The same checks run locally via [pre-commit](https://pre-commit.com/) — but only if you install the git hooks once after cloning. Without this step, the local gate is silent and the first time a violation is caught is in CI, after your commit (and any leaked secret) is already in git history.
+
+Install once per clone:
+
+```bash
+pip install pre-commit              # or: pipx install pre-commit / brew install pre-commit
+pre-commit install                  # registers .git/hooks/pre-commit
+pre-commit install --install-hooks  # pre-fetch hook deps (optional, faster first run)
+```
+
+After this, `git commit` runs gitleaks + ruff + ruff-format + the standard hygiene hooks (trailing whitespace, EOF, merge-conflict markers, private-key detection) against your staged changes. Commits that fail the hooks are blocked locally. Hook config lives in `.pre-commit-config.yaml`.
+
+To run all hooks against the whole tree on demand (useful before opening a PR):
+
+```bash
+pre-commit run --all-files
+```
+
+**Why this matters.** Gitleaks catching a credential at the pre-commit stage prevents it from ever landing in your local git history. Catching it in CI means the secret is already in a pushed commit and must be rotated, not just removed. Always rotate any credential that touched git, even if force-pushed away.
+
 ## Layout
 
 ```
