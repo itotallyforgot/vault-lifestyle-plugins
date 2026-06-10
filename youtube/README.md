@@ -145,6 +145,9 @@ The record schema is documented in
 `youtube/schemas/youtube_handoff.schema.json`, with a checked example in
 `youtube/examples/engineering-handoff.jsonl`.
 
+Adapter authors should follow the MCP/CLI/browser handoff contract in
+`docs/youtube-handoff-adapter-contract.md`.
+
 For local, explicit cookie/browser export, `vault-yt` can ask yt-dlp to resolve
 the playlist and write the handoff file without ingesting transcripts:
 

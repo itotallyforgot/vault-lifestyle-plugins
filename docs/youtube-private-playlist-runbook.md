@@ -12,6 +12,9 @@ authenticated local resolver -> handoff JSONL -> vault-yt batch ingest -> run re
 `vault-yt` may use yt-dlp browser/cookie access to export playlist membership,
 but raw ingest only consumes handoff metadata and video URLs.
 
+For the adapter-author contract behind this flow, see
+`docs/youtube-handoff-adapter-contract.md`.
+
 ## Safety Rules
 
 - Browser cookies and cookie files are account secrets.
