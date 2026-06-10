@@ -37,6 +37,7 @@ area under work:
 - raw ingest writes only
 - per-integration auth
 - YouTube bulk staging handoff
+- YouTube handoff adapter contract
 
 If a proposed change conflicts with an ADR, surface that conflict explicitly
 before editing.
