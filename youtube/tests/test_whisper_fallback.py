@@ -17,11 +17,15 @@ import pytest
 
 from vault_yt.whisper_fallback import (
     ALLOWED_MODELS,
+    COMPRESSION_RATIO_THRESHOLD,
     DEFAULT_MODEL,
+    LOGPROB_THRESHOLD,
+    NO_SPEECH_THRESHOLD,
     WhisperFallbackError,
     WhisperModelTooLargeError,
     WhisperTranscriptionError,
     WhisperUnavailableError,
+    assess_segments,
     transcribe_audio,
 )
 
@@ -154,7 +158,7 @@ def test_transcribe_returns_stripped_text(tmp_path: Path, monkeypatch: pytest.Mo
 
     result = transcribe_audio(audio)
 
-    assert result == "hello world"
+    assert result.text == "hello world"
 
 
 def test_transcribe_returns_empty_string_when_text_missing(
@@ -169,7 +173,7 @@ def test_transcribe_returns_empty_string_when_text_missing(
 
     result = transcribe_audio(audio)
 
-    assert result == ""
+    assert result.text == ""
 
 
 def test_transcribe_returns_empty_string_when_text_not_str(
@@ -184,7 +188,7 @@ def test_transcribe_returns_empty_string_when_text_not_str(
 
     result = transcribe_audio(audio)
 
-    assert result == ""
+    assert result.text == ""
 
 
 def test_transcribe_passes_language_hint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -220,7 +224,7 @@ def test_audio_path_accepts_string(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     result = transcribe_audio(str(audio))  # str, not Path
 
-    assert result == "ok"
+    assert result.text == "ok"
 
 
 # ---------- transcription failure modes (kind discriminator) ----------
@@ -301,6 +305,129 @@ def test_live_transcribe_with_real_model(tmp_path: Path, monkeypatch: pytest.Mon
         w.setframerate(16000)
         w.writeframes(struct.pack("<" + "h" * 16000, *([0] * 16000)))
 
-    text = transcribe_audio(audio, model="base", language="en")
+    result = transcribe_audio(audio, model="base", language="en")
 
-    assert isinstance(text, str)  # Silence may return "" or filler — just assert shape.
+    # Silence may return "" or filler — just assert shape.
+    assert isinstance(result.text, str)
+
+
+# ---------- transcript quality heuristics (L2) ----------
+
+
+def _good_segment() -> dict[str, float]:
+    return {"compression_ratio": 1.5, "avg_logprob": -0.3, "no_speech_prob": 0.05}
+
+
+def test_assess_segments_clean_transcript_is_ok():
+    verdict, reasons = assess_segments([_good_segment(), _good_segment()])
+
+    assert verdict == "ok"
+    assert reasons == ()
+
+
+def test_assess_segments_empty_is_ok():
+    """No segments (older whisper / minimal result) must not false-positive."""
+    verdict, reasons = assess_segments([])
+
+    assert verdict == "ok"
+    assert reasons == ()
+
+
+def test_assess_segments_flags_high_compression_ratio():
+    bad = {**_good_segment(), "compression_ratio": COMPRESSION_RATIO_THRESHOLD + 0.5}
+
+    verdict, reasons = assess_segments([_good_segment(), bad])
+
+    assert verdict == "suspect"
+    assert any("compression_ratio" in r for r in reasons)
+
+
+def test_assess_segments_flags_low_avg_logprob():
+    bad = {**_good_segment(), "avg_logprob": LOGPROB_THRESHOLD - 0.5}
+
+    verdict, reasons = assess_segments([bad])
+
+    assert verdict == "suspect"
+    assert any("avg_logprob" in r for r in reasons)
+
+
+def test_assess_segments_flags_high_no_speech_prob():
+    bad = {**_good_segment(), "no_speech_prob": NO_SPEECH_THRESHOLD + 0.2}
+
+    verdict, reasons = assess_segments([bad])
+
+    assert verdict == "suspect"
+    assert any("no_speech_prob" in r for r in reasons)
+
+
+def test_assess_segments_ignores_non_numeric_and_missing_fields():
+    """Missing or non-numeric signals are skipped, not treated as bad."""
+    weird = {"compression_ratio": None, "avg_logprob": "nan"}
+
+    verdict, reasons = assess_segments([weird, {}])
+
+    assert verdict == "ok"
+    assert reasons == ()
+
+
+def test_assess_segments_at_threshold_is_not_suspect():
+    """Heuristics are strict inequalities — exactly at the threshold is OK."""
+    edge = {
+        "compression_ratio": COMPRESSION_RATIO_THRESHOLD,
+        "avg_logprob": LOGPROB_THRESHOLD,
+        "no_speech_prob": NO_SPEECH_THRESHOLD,
+    }
+
+    verdict, _ = assess_segments([edge])
+
+    assert verdict == "ok"
+
+
+def test_transcribe_marks_suspect_when_segments_trip_heuristics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """A hallucinated transcript should come back quality='suspect' AND warn on stderr."""
+    audio = _make_audio(tmp_path)
+    fake_whisper = MagicMock()
+    fake_model = MagicMock()
+    fake_model.transcribe.return_value = {
+        "text": "la la la la la la la",
+        "segments": [
+            {
+                "compression_ratio": 3.1,
+                "avg_logprob": -1.4,
+                "no_speech_prob": 0.8,
+            }
+        ],
+    }
+    fake_whisper.load_model.return_value = fake_model
+    monkeypatch.setitem(sys.modules, "whisper", fake_whisper)
+
+    result = transcribe_audio(audio)
+
+    assert result.quality == "suspect"
+    assert result.text == "la la la la la la la"
+    assert result.suspect_reasons  # non-empty
+    captured = capsys.readouterr()
+    assert "suspect" in captured.err
+    assert "hallucinated" in captured.err
+
+
+def test_transcribe_clean_segments_stay_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    audio = _make_audio(tmp_path)
+    fake_whisper = MagicMock()
+    fake_model = MagicMock()
+    fake_model.transcribe.return_value = {
+        "text": "a genuine sentence of real speech",
+        "segments": [_good_segment()],
+    }
+    fake_whisper.load_model.return_value = fake_model
+    monkeypatch.setitem(sys.modules, "whisper", fake_whisper)
+
+    result = transcribe_audio(audio)
+
+    assert result.quality == "ok"
+    assert result.suspect_reasons == ()
+    assert "suspect" not in capsys.readouterr().err

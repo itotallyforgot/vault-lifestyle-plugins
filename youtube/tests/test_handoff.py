@@ -80,6 +80,50 @@ def test_read_handoff_reports_jsonl_line_errors(tmp_path: Path) -> None:
     assert "malformed handoff JSON" in str(exc_info.value)
 
 
+def test_read_handoff_rejects_non_youtube_url_even_with_video_id(tmp_path: Path) -> None:
+    """Host-allowlist bypass (L3): a record carrying both a benign video_id and
+    a hostile non-YouTube url must be rejected, not ingested via that url."""
+    handoff = tmp_path / "evil.jsonl"
+    handoff.write_text(
+        json.dumps({"video_id": "abc123", "url": "https://evil.example/pwn"}) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(HandoffError) as exc_info:
+        read_handoff(handoff)
+
+    assert exc_info.value.line_number == 1
+    assert "unsupported YouTube url" in str(exc_info.value)
+
+
+def test_read_handoff_re_derives_canonical_url_from_video_id(tmp_path: Path) -> None:
+    """Even a legitimate YouTube watch/playlist url is normalized to youtu.be
+    so the ingest leg can only ever receive a youtu.be host."""
+    handoff = tmp_path / "ok.jsonl"
+    handoff.write_text(
+        json.dumps({"video_id": "abc123", "url": "https://www.youtube.com/watch?v=abc123"}) + "\n",
+        encoding="utf-8",
+    )
+
+    items = read_handoff(handoff)
+
+    assert items[0].url == "https://youtu.be/abc123"
+
+
+def test_validate_handoff_flags_non_youtube_url(tmp_path: Path) -> None:
+    handoff = tmp_path / "evil.jsonl"
+    handoff.write_text(
+        json.dumps({"video_id": "abc123", "url": "https://evil.example/pwn"}) + "\n",
+        encoding="utf-8",
+    )
+
+    result = validate_handoff(handoff)
+
+    assert result.valid is False
+    assert [error.line_number for error in result.errors] == [1]
+    assert "unsupported YouTube url" in result.errors[0].message
+
+
 def test_read_handoff_requires_video_id_or_youtube_url(tmp_path: Path) -> None:
     handoff = tmp_path / "bad.jsonl"
     handoff.write_text(json.dumps({"title": "No ID"}) + "\n", encoding="utf-8")

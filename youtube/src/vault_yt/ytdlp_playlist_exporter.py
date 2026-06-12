@@ -75,7 +75,10 @@ def export_playlist_handoff(
     }
     provider = "yt-dlp-public"
     if cookies is not None:
-        opts["cookies"] = str(cookies)
+        # yt-dlp's programmatic option is `cookiefile`, not `cookies`. The
+        # latter is silently ignored, so the export would run unauthenticated
+        # while stamping source_provider as cookie-authenticated.
+        opts["cookiefile"] = str(cookies)
         provider = "yt-dlp-cookies"
     elif browser is not None:
         opts["cookiesfrombrowser"] = parse_browser_spec(browser)
