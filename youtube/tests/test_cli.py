@@ -19,9 +19,14 @@ from vault_yt.manifest import (
     save_manifest,
 )
 from vault_yt.slug import make
-from vault_yt.whisper_fallback import WhisperUnavailableError
+from vault_yt.whisper_fallback import TranscriptResult, WhisperUnavailableError
 
 runner = CliRunner()
+
+
+def _whisper(text: str, quality: str = "ok") -> TranscriptResult:
+    """Build a stub `transcribe_audio` return value for CLI tests."""
+    return TranscriptResult(text=text, quality=quality)  # type: ignore[arg-type]
 
 
 def _vault(tmp_path: Path) -> Path:
@@ -122,7 +127,7 @@ def test_whisper_path_writes_raw_file(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         cli_module,
         "transcribe_audio",
-        lambda audio, model="base", language=None, verbose=False: "whisper text",
+        lambda audio, model="base", language=None, verbose=False: _whisper("whisper text"),
     )
 
     result = runner.invoke(
@@ -138,6 +143,43 @@ def test_whisper_path_writes_raw_file(tmp_path: Path, monkeypatch) -> None:
     assert "whisper text" in text
 
 
+def test_suspect_whisper_transcript_stamps_frontmatter(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    meta = _meta(captions=[], caption_kinds={})
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: meta)
+    monkeypatch.setattr(cli_module, "download_audio", lambda url, dest_dir: dest_dir / "audio.m4a")
+    monkeypatch.setattr(
+        cli_module,
+        "transcribe_audio",
+        lambda audio, model="base", language=None, verbose=False: _whisper(
+            "la la la", quality="suspect"
+        ),
+    )
+
+    result = runner.invoke(cli_module.app, ["https://youtu.be/abc123", "--vault", str(vault)])
+
+    assert result.exit_code == 0
+    text = _raw_path(vault, meta).read_text()
+    assert "transcript_quality: suspect" in text
+
+
+def test_clean_whisper_transcript_omits_quality_frontmatter(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    meta = _meta(captions=[], caption_kinds={})
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: meta)
+    monkeypatch.setattr(cli_module, "download_audio", lambda url, dest_dir: dest_dir / "audio.m4a")
+    monkeypatch.setattr(
+        cli_module,
+        "transcribe_audio",
+        lambda audio, model="base", language=None, verbose=False: _whisper("clean text"),
+    )
+
+    result = runner.invoke(cli_module.app, ["https://youtu.be/abc123", "--vault", str(vault)])
+
+    assert result.exit_code == 0
+    assert "transcript_quality" not in _raw_path(vault, meta).read_text()
+
+
 def test_whisper_tiny_model_writes_raw_file(tmp_path: Path, monkeypatch) -> None:
     vault = _vault(tmp_path)
     meta = _meta(captions=[], caption_kinds={})
@@ -146,7 +188,7 @@ def test_whisper_tiny_model_writes_raw_file(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(
         cli_module,
         "transcribe_audio",
-        lambda audio, model="tiny", language=None, verbose=False: "tiny whisper text",
+        lambda audio, model="tiny", language=None, verbose=False: _whisper("tiny whisper text"),
     )
 
     result = runner.invoke(
@@ -168,7 +210,7 @@ def test_whisper_model_env_is_used(tmp_path: Path, monkeypatch) -> None:
 
     def transcribe(audio, model="base", language=None, verbose=False):
         seen["model"] = model
-        return "env whisper text"
+        return _whisper("env whisper text")
 
     monkeypatch.setattr(cli_module, "transcribe_audio", transcribe)
 
@@ -296,7 +338,7 @@ def test_empty_transcript_exits_8(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         cli_module,
         "transcribe_audio",
-        lambda audio, model="base", language=None, verbose=False: "",
+        lambda audio, model="base", language=None, verbose=False: _whisper(""),
     )
 
     result = runner.invoke(cli_module.app, ["https://youtu.be/abc123", "--vault", str(vault)])
@@ -314,7 +356,9 @@ def test_empty_captions_fall_back_to_whisper(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.setattr(
         cli_module,
         "transcribe_audio",
-        lambda audio, model="base", language=None, verbose=False: "whisper after empty captions",
+        lambda audio, model="base", language=None, verbose=False: _whisper(
+            "whisper after empty captions"
+        ),
     )
 
     result = runner.invoke(cli_module.app, ["https://youtu.be/abc123", "--vault", str(vault)])
@@ -351,7 +395,7 @@ def test_force_whisper_skips_caption_fetch(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         cli_module,
         "transcribe_audio",
-        lambda audio, model="base", language=None, verbose=False: "whisper text",
+        lambda audio, model="base", language=None, verbose=False: _whisper("whisper text"),
     )
 
     def fail_if_called(*args, **kwargs):  # pragma: no cover - assertion helper
@@ -377,7 +421,7 @@ def test_force_whisper_passes_transcript_language_hint(tmp_path: Path, monkeypat
 
     def transcribe(audio, model="base", language=None, verbose=False):
         seen["language"] = language
-        return "texte whisper"
+        return _whisper("texte whisper")
 
     monkeypatch.setattr(cli_module, "transcribe_audio", transcribe)
 
@@ -407,7 +451,7 @@ def test_verbose_flag_passes_through_to_whisper(tmp_path: Path, monkeypatch) -> 
 
     def transcribe(audio, model="base", language=None, verbose=False):
         seen["verbose"] = verbose
-        return "whisper text"
+        return _whisper("whisper text")
 
     monkeypatch.setattr(cli_module, "transcribe_audio", transcribe)
 
@@ -461,6 +505,49 @@ def test_url_file_batch_processes_limited_items_and_writes_manifest(
     assert manifest.items[0].raw_path == "raw/2026-05-05-youtube-abc123-alpha.md"
     assert manifest.items[1].status == "pending"
     assert (vault / manifest.items[0].raw_path).exists()
+
+
+def test_traversing_run_id_is_rejected_before_any_write(tmp_path: Path, monkeypatch) -> None:
+    """A hostile --run-id must exit 2 and not escape the vault staging area."""
+    vault = _vault(tmp_path)
+    url_file = tmp_path / "urls.txt"
+    url_file.write_text("https://youtu.be/abc123\n", encoding="utf-8")
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: _meta())
+    monkeypatch.setattr(cli_module, "fetch_captions", lambda url, lang="en": "caption text")
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--url-file",
+            str(url_file),
+            "--run-id",
+            "../../../../tmp/evil",
+            "--vault",
+            str(vault),
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "invalid --run-id" in result.output
+    assert not (tmp_path / "tmp" / "evil").exists()
+
+
+def test_non_youtube_single_url_is_rejected(tmp_path: Path, monkeypatch) -> None:
+    """Single-URL mode must enforce the YouTube host allow-list, not just scheme."""
+    vault = _vault(tmp_path)
+
+    def fail_if_called(*args, **kwargs):  # pragma: no cover - assertion helper
+        raise AssertionError("yt-dlp must not be reached for a non-YouTube host")
+
+    monkeypatch.setattr(cli_module, "fetch_meta", fail_if_called)
+
+    result = runner.invoke(
+        cli_module.app,
+        ["https://evil.example/watch?v=abc123", "--vault", str(vault)],
+    )
+
+    assert result.exit_code == 2
+    assert "unsupported YouTube url" in result.output
 
 
 def test_handoff_batch_processes_items_and_preserves_discovered_titles(

@@ -13,16 +13,26 @@ so the CLI (Slice 5 / OGR-9) can map cleanly to the spec's exit codes:
 | 6         | whisper extra not installed           | WhisperUnavailableError                         |
 | 7         | whisper model download/load failed    | WhisperTranscriptionError(kind="model_load")    |
 | 7         | transcribe call raised at runtime     | WhisperTranscriptionError(kind="transcribe")    |
-| 8         | transcript empty                      | (returned as `""`; CLI maps empty → exit 8)     |
+| 8         | transcript empty                      | (TranscriptResult.text == ""; CLI maps → exit 8)|
 | n/a       | requested model exceeds spec cap      | WhisperModelTooLargeError                       |
 | n/a       | audio file missing                    | FileNotFoundError                               |
+
+`transcribe_audio` returns a `TranscriptResult` (text + quality verdict). A
+segment that trips a standard hallucination heuristic
+(`compression_ratio`/`avg_logprob`/`no_speech_prob`) marks the result
+`quality="suspect"`, emits a stderr warning, and lets the CLI stamp
+`transcript_quality: suspect` into the raw frontmatter for `/vault ingest` to
+gate on.
 """
 
 from __future__ import annotations
 
 import logging
+import sys
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +42,77 @@ DEFAULT_MODEL = "base"
 # revision, not an env var. (Reviewer flagged this; locked deliberately.)
 ALLOWED_MODELS: tuple[str, ...] = ("tiny", "base", "small")
 
+# Standard Whisper hallucination heuristics (mirrors openai-whisper's own
+# `DecodingOptions` failure thresholds). A segment that trips any of these is
+# a strong signal of fabricated / low-confidence text — small/base models
+# hallucinate confidently on music, silence, and non-speech audio.
+COMPRESSION_RATIO_THRESHOLD = 2.4  # repetitive/looping text inflates this
+LOGPROB_THRESHOLD = -1.0  # below this, the model is guessing
+NO_SPEECH_THRESHOLD = 0.6  # high → segment is probably not speech at all
 
+TranscriptQuality = Literal["ok", "suspect"]
 WhisperTranscriptionKind = Literal["model_load", "transcribe"]
+
+
+@dataclass(frozen=True)
+class TranscriptResult:
+    """A Whisper transcript plus a coarse quality verdict.
+
+    `quality == "suspect"` means at least one segment tripped a standard
+    hallucination heuristic. The CLI stamps `transcript_quality: suspect`
+    into the raw frontmatter so `/vault ingest` can gate on it instead of
+    silently accepting a fabricated transcript.
+    """
+
+    text: str
+    quality: TranscriptQuality = "ok"
+    suspect_reasons: tuple[str, ...] = field(default_factory=tuple)
+
+
+def assess_segments(segments: Sequence[Any]) -> tuple[TranscriptQuality, tuple[str, ...]]:
+    """Classify Whisper segments as `ok` or `suspect` via standard heuristics.
+
+    Pure function — no I/O. Accepts the `result["segments"]` list of dicts (or
+    any mapping-like objects exposing `compression_ratio`, `avg_logprob`, and
+    `no_speech_prob`). Missing/non-numeric fields are skipped, not assumed bad,
+    so older Whisper versions that omit a key never false-positive.
+
+    Returns `(verdict, reasons)`. `reasons` is a deduped, ordered tuple of
+    short human-readable strings for the stderr warning.
+    """
+    reasons: list[str] = []
+
+    def _num(seg: Any, key: str) -> float | None:
+        value = seg.get(key) if hasattr(seg, "get") else getattr(seg, key, None)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value)
+
+    saw_high_compression = False
+    saw_low_logprob = False
+    saw_no_speech = False
+    for seg in segments:
+        compression_ratio = _num(seg, "compression_ratio")
+        if compression_ratio is not None and compression_ratio > COMPRESSION_RATIO_THRESHOLD:
+            saw_high_compression = True
+
+        avg_logprob = _num(seg, "avg_logprob")
+        if avg_logprob is not None and avg_logprob < LOGPROB_THRESHOLD:
+            saw_low_logprob = True
+
+        no_speech_prob = _num(seg, "no_speech_prob")
+        if no_speech_prob is not None and no_speech_prob > NO_SPEECH_THRESHOLD:
+            saw_no_speech = True
+
+    if saw_high_compression:
+        reasons.append(f"compression_ratio > {COMPRESSION_RATIO_THRESHOLD} (repetitive text)")
+    if saw_low_logprob:
+        reasons.append(f"avg_logprob < {LOGPROB_THRESHOLD} (low confidence)")
+    if saw_no_speech:
+        reasons.append(f"no_speech_prob > {NO_SPEECH_THRESHOLD} (likely non-speech)")
+
+    verdict: TranscriptQuality = "suspect" if reasons else "ok"
+    return verdict, tuple(reasons)
 
 
 class WhisperFallbackError(RuntimeError):
@@ -73,8 +152,8 @@ def transcribe_audio(
     model: str = DEFAULT_MODEL,
     language: str | None = None,
     verbose: bool = False,
-) -> str:
-    """Transcribe `audio_path` via local Whisper. Returns plain text.
+) -> TranscriptResult:
+    """Transcribe `audio_path` via local Whisper.
 
     Args:
         audio_path: input audio file (typically m4a from `extractor.download_audio`).
@@ -86,8 +165,12 @@ def transcribe_audio(
         verbose: pass through to Whisper's transcribe call.
 
     Returns:
-        Transcript text, stripped. Empty string when whisper produces no text
-        (CLI maps empty → exit 8).
+        A `TranscriptResult`: stripped transcript text plus a quality verdict
+        derived from Whisper's per-segment confidence signals. `text` is the
+        empty string when whisper produces no text (CLI maps empty → exit 8).
+        `quality == "suspect"` when any segment trips a hallucination
+        heuristic; a warning is also emitted to stderr so a non-gating caller
+        still sees it.
 
     Raises:
         WhisperModelTooLargeError: `model` not in `ALLOWED_MODELS`.
@@ -137,7 +220,17 @@ def transcribe_audio(
             "transcribe", f"whisper.transcribe({audio_path}) failed: {e}"
         ) from e
 
-    text = result.get("text", "")
-    if not isinstance(text, str):
-        return ""
-    return text.strip()
+    raw_text = result.get("text", "")
+    text = raw_text.strip() if isinstance(raw_text, str) else ""
+
+    raw_segments = result.get("segments") or []
+    segments = raw_segments if isinstance(raw_segments, Sequence) else []
+    quality, reasons = assess_segments(segments)
+    if quality == "suspect":
+        logger.warning("whisper transcript flagged suspect: %s", "; ".join(reasons))
+        print(
+            f"warning: whisper transcript may be hallucinated ({'; '.join(reasons)}). "
+            "Frontmatter stamped transcript_quality: suspect.",
+            file=sys.stderr,
+        )
+    return TranscriptResult(text=text, quality=quality, suspect_reasons=reasons)
