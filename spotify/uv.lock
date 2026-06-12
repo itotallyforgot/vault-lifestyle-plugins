@@ -612,7 +612,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7.0" },
-    { name = "spotipy", specifier = ">=2.23,<3.0" },
+    { name = "spotipy", specifier = ">=2.25.1,<3.0" },
     { name = "typer", specifier = ">=0.12" },
     { name = "vault-lifestyle-plugins-lib", editable = "../lib" },
 ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import stat
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -286,6 +287,48 @@ def test_run_auth_dance_creates_cache_parent(
     run_auth_dance(client_id="test-id", cache_path=cache)
 
     assert cache.parent.is_dir()
+
+
+def test_run_auth_dance_restricts_token_cache_to_0600(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression for L4 / GHSA-pwhh-q4h6-w599: the refresh-token cache must
+    not be world-readable. We defensively chmod 0600 even if the spotipy floor
+    drifts below 2.25.1. Simulate spotipy writing a world-readable cache, then
+    assert run_auth_dance tightened it."""
+    cache = tmp_path / "tokens.json"
+
+    def write_world_readable_cache() -> str:
+        cache.write_text('{"refresh_token": "secret"}', encoding="utf-8")
+        cache.chmod(0o644)  # what a pre-2.25.1 spotipy would leave behind
+        return "fake-token"
+
+    fake_module = MagicMock()
+    fake_pkce = MagicMock()
+    fake_pkce.get_access_token.side_effect = write_world_readable_cache
+    fake_module.SpotifyPKCE = MagicMock(return_value=fake_pkce)
+    monkeypatch.setitem(sys.modules, "spotipy.oauth2", fake_module)
+
+    run_auth_dance(client_id="test-id", cache_path=cache)
+
+    mode = stat.S_IMODE(cache.stat().st_mode)
+    assert mode == 0o600, f"token cache perms are {oct(mode)}, expected 0o600"
+    # Explicitly: no group/other access bits.
+    assert not mode & (stat.S_IRWXG | stat.S_IRWXO)
+
+
+def test_run_auth_dance_chmod_is_best_effort_when_cache_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing cache file (spotipy wrote nothing) must not crash auth — the
+    defensive chmod swallows OSError and logs instead."""
+    _install_fake_spotipy(monkeypatch)  # get_access_token writes no file
+    cache = tmp_path / "tokens.json"
+
+    # Should not raise even though `cache` never gets created.
+    run_auth_dance(client_id="test-id", cache_path=cache)
+
+    assert not cache.exists()
 
 
 def test_run_auth_dance_calls_get_access_token(

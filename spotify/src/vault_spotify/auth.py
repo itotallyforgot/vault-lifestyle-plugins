@@ -29,11 +29,14 @@ CLI maps cleanly to spec exit codes.
 
 from __future__ import annotations
 
+import logging
 import os
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "vault-lifestyle-plugins" / "spotify.toml"
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:8888/callback"
@@ -215,6 +218,24 @@ def run_auth_dance(
         pkce.get_access_token()
     except Exception as e:
         raise SpotifyAuthError(f"Spotify OAuth dance failed: {e}") from e
+
+    # Defense in depth: spotipy >= 2.25.1 already chmods the cache to 0600
+    # (GHSA-pwhh-q4h6-w599), but pin-drift or a patched fork could ship without
+    # it, leaving the refresh token world-readable under the default umask.
+    # Re-assert restrictive perms ourselves rather than trusting the dependency.
+    _restrict_cache_permissions(cache_path)
+
+
+def _restrict_cache_permissions(cache_path: Path) -> None:
+    """chmod the token cache to 0600 (owner read/write only), best-effort.
+
+    Never raises: a missing file or an unsupported filesystem (e.g. some
+    Windows/network mounts) must not fail an otherwise-successful auth.
+    """
+    try:
+        cache_path.chmod(0o600)
+    except OSError as e:
+        logger.warning("could not restrict token cache permissions at %s: %s", cache_path, e)
 
 
 def load_or_refresh_token(

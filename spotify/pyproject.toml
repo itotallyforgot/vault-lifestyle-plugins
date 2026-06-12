@@ -6,7 +6,11 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "vault-lifestyle-plugins contributors" }]
 dependencies = [
-    "spotipy>=2.23,<3.0",
+    # Floor pinned to 2.25.1: the 0600 token-cache chmod (GHSA-pwhh-q4h6-w599)
+    # only landed in 2.25.1. Earlier releases leave the refresh token
+    # world-readable under the default umask. Upper-pinned below 3.0 for the
+    # usual major-bump-breaks-API reason.
+    "spotipy>=2.25.1,<3.0",
     "pydantic>=2.0",
     "typer>=0.12",
     "vault-lifestyle-plugins-lib",
