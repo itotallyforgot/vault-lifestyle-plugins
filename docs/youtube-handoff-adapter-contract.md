@@ -77,7 +77,7 @@ Each record must include either `video_id` or `url`.
 | Field | Required | Type | Notes |
 |---|---:|---|---|
 | `video_id` | conditional | string | YouTube video ID. Preferred stable identity. |
-| `url` | conditional | string URL | Canonical or source YouTube video URL. |
+| `url` | conditional | string URL | Canonical or source YouTube video URL. Host-validated against the YouTube allow-list (even when `video_id` is present) and normalized to `https://youtu.be/<video_id>` on read. |
 | `title` | no | string | Title observed by the adapter. `vault-yt` may later replace it with fetched metadata. |
 | `source_provider` | no | string | Adapter name, such as `youtube-mcp`, `yt-dlp-browser`, `yt-dlp-cookies`, `claude-code-youtube`, or `manual-export`. |
 | `playlist_id` | no | string | YouTube playlist ID, when the source is playlist-like. |
@@ -225,6 +225,11 @@ operator-approved parcel.
 - A line is malformed JSON.
 - A non-comment line is not a JSON object.
 - A record omits both `video_id` and a parseable YouTube `url`.
+- A record carries a `url` whose host is not in the YouTube allow-list
+  (`youtube.com`, `m.youtube.com`, `music.youtube.com`, `youtu.be`). The `url`
+  is validated through `inputs._parse_youtube_input` **even when a `video_id`
+  is also present**, so a record cannot smuggle a non-YouTube url past the
+  ingest leg.
 - A field has the wrong type.
 - `playlist_index` is below `1`.
 - A record contains an unknown field.

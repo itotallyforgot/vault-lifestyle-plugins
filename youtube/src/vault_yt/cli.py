@@ -21,8 +21,14 @@ from vault_resolver import VaultPathError, resolve_vault_path
 
 from vault_yt.extractor import ExtractorError, download_audio, fetch_captions, fetch_meta
 from vault_yt.handoff import HandoffError, read_handoff, validate_handoff
-from vault_yt.inputs import InputExpansionError, WorkItem, expand_inputs
+from vault_yt.inputs import (
+    InputExpansionError,
+    WorkItem,
+    _parse_youtube_input,
+    expand_inputs,
+)
 from vault_yt.manifest import (
+    InvalidRunIdError,
     ManifestError,
     ManifestItem,
     VerificationEvidence,
@@ -35,6 +41,7 @@ from vault_yt.manifest import (
     render_run_report,
     save_manifest,
     update_item_status,
+    validate_run_id,
 )
 from vault_yt.resolver import choose_transcript_source
 from vault_yt.slug import make
@@ -226,6 +233,12 @@ def command(
     """Fetch a transcript and write `<vault>/raw/<slug>.md`."""
     _configure_logging(verbose)
 
+    if run_id is not None:
+        try:
+            validate_run_id(run_id)
+        except InvalidRunIdError as e:
+            _fail(2, f"invalid --run-id: {e}")
+
     if validate_handoff_file is not None:
         _validate_handoff(validate_handoff_file)
         raise typer.Exit(0)
@@ -328,6 +341,14 @@ def _ingest_url(
 ) -> IngestOutcome:
     if not _looks_like_url(url):
         _fail(2, f"malformed url: {url}")
+    # Enforce the YouTube host allow-list here too, not just for batch inputs.
+    # _looks_like_url only checks scheme + netloc, so without this a non-YouTube
+    # url (a single-URL arg, or a handoff-derived item.url) would be handed to
+    # yt-dlp verbatim. (Host-allowlist bypass, L3.)
+    try:
+        _parse_youtube_input(url)
+    except InputExpansionError:
+        _fail(2, f"unsupported YouTube url: {url}")
 
     raw_dir = vault_path / "raw"
     model = whisper_model or os.environ.get("VAULT_YT_WHISPER_MODEL") or DEFAULT_MODEL
@@ -356,7 +377,7 @@ def _ingest_url(
         _fail(9, f"collision: {target} already exists for a different source")
 
     try:
-        transcript, transcript_source = _resolve_transcript(
+        resolved = _resolve_transcript(
             url,
             meta,
             model=model,
@@ -373,15 +394,21 @@ def _ingest_url(
     except WhisperFallbackError as e:
         _fail(7, f"whisper error: {e}")
 
+    transcript = resolved.text
+    transcript_source = resolved.source
     if not transcript.strip():
         _fail(8, f"empty transcript from {transcript_source}")
+
+    quality_frontmatter: dict[str, Any] = dict(extra_frontmatter or {})
+    if resolved.quality == "suspect":
+        quality_frontmatter["transcript_quality"] = "suspect"
 
     try:
         content = build_raw_md(
             meta,
             transcript,
             transcript_source=transcript_source,
-            extra_frontmatter=extra_frontmatter,
+            extra_frontmatter=quality_frontmatter,
         )
     except (WriterError, ValidationError) as e:
         _fail(10, f"frontmatter validation bug: {e}")
@@ -619,6 +646,15 @@ def main() -> None:
     app()
 
 
+@dataclass(frozen=True)
+class _Transcript:
+    """Resolved transcript text plus its source and quality verdict."""
+
+    text: str
+    source: str
+    quality: Literal["ok", "suspect"] = "ok"
+
+
 def _resolve_transcript(
     url: str,
     meta: VideoMeta,
@@ -627,26 +663,26 @@ def _resolve_transcript(
     force_whisper: bool,
     transcript_language: str,
     verbose: bool,
-) -> tuple[str, str]:
+) -> _Transcript:
     source = choose_transcript_source(meta, lang=transcript_language, force_whisper=force_whisper)
 
     if source == "captions":
         _debug(verbose, "fetching captions")
         transcript = _with_network_retry(fetch_captions, url, transcript_language, verbose=verbose)
         if transcript and transcript.strip():
-            return transcript, "yt-dlp"
+            return _Transcript(text=transcript, source="yt-dlp")
         _debug(verbose, "captions empty, falling back to whisper")
 
     _debug(verbose, f"using whisper model {model}")
     with tempfile.TemporaryDirectory() as td:
         audio_path = _with_network_retry(download_audio, url, Path(td), verbose=verbose)
-        transcript = transcribe_audio(
+        result = transcribe_audio(
             audio_path,
             model=model,
             language=transcript_language,
             verbose=verbose,
         )
-    return transcript, f"whisper-{model}"
+    return _Transcript(text=result.text, source=f"whisper-{model}", quality=result.quality)
 
 
 def _with_network_retry[T](

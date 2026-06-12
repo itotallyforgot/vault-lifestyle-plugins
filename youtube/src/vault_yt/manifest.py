@@ -5,11 +5,37 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import tempfile
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
+
+# run_id becomes a path segment under <vault>/.vault-lifestyle/youtube/runs/.
+# Restrict it to a safe charset so a hostile --run-id (e.g.
+# "../../../../tmp/x") cannot escape the vault. Rejects path separators and
+# "..". Matches the chars an operator would realistically use for a run label.
+_RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+class InvalidRunIdError(ValueError):
+    """Raised when a run_id is unsafe to use as a filesystem path segment."""
+
+
+def validate_run_id(run_id: str) -> str:
+    """Return run_id if it is a safe single path segment, else raise.
+
+    Rejects empty strings, anything outside ``[A-Za-z0-9._-]`` (which excludes
+    ``/`` and ``\\``), and the traversal tokens ``.`` and ``..``.
+    """
+    if not _RUN_ID_PATTERN.fullmatch(run_id) or run_id in {".", ".."}:
+        raise InvalidRunIdError(
+            f"invalid run_id {run_id!r}: must match {_RUN_ID_PATTERN.pattern} "
+            "and not be a path-traversal token"
+        )
+    return run_id
+
 
 ItemStatus = Literal[
     "pending",
@@ -130,7 +156,12 @@ class RunManifest:
 
 
 def default_manifest_path(vault_path: Path, run_id: str) -> Path:
-    """Return the default manifest path for a vault and run."""
+    """Return the default manifest path for a vault and run.
+
+    ``run_id`` is validated as a safe single path segment first, so a hostile
+    value cannot traverse outside the vault's staging area.
+    """
+    validate_run_id(run_id)
     return Path(vault_path) / ".vault-lifestyle" / "youtube" / "runs" / run_id / "manifest.json"
 
 

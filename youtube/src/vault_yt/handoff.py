@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from vault_yt.inputs import InputAppearance, InputExpansionError, WorkItem, parse_video_id
+from vault_yt.inputs import (
+    InputAppearance,
+    InputExpansionError,
+    WorkItem,
+    _parse_youtube_input,
+)
 
 _STRING_FIELDS = {
     "video_id",
@@ -189,15 +194,26 @@ def _parse_line(line: str, *, path: Path, line_number: int) -> HandoffRecord:
 
     video_id = _string_or_none(raw.get("video_id"))
     url = _string_or_none(raw.get("url"))
-    if video_id is None and url is not None:
+
+    # Always validate the url through the YouTube host allow-list, even when a
+    # video_id is also present. Otherwise a record carrying both a benign
+    # video_id and a hostile non-YouTube url (e.g. url="https://evil.example")
+    # would batch-ingest that url verbatim — cli._ingest_url only checks the
+    # scheme, not the host. (Host-allowlist bypass, L3.)
+    url_video_id: str | None = None
+    if url is not None:
         try:
-            video_id = parse_video_id(url)
+            parsed = _parse_youtube_input(url)
         except InputExpansionError as e:
             raise HandoffError(
                 f"handoff record at {path}:{line_number} has unsupported YouTube url",
                 path=path,
                 line_number=line_number,
             ) from e
+        url_video_id = parsed.video_id
+
+    if video_id is None:
+        video_id = url_video_id
     if video_id is None:
         raise HandoffError(
             f"handoff record at {path}:{line_number} requires video_id or YouTube url",
@@ -207,7 +223,10 @@ def _parse_line(line: str, *, path: Path, line_number: int) -> HandoffRecord:
 
     return HandoffRecord(
         video_id=video_id,
-        url=url or f"https://youtu.be/{video_id}",
+        # Re-derive the canonical url from the resolved video_id rather than
+        # trusting the record's url field. Guarantees the ingest leg only ever
+        # sees a youtu.be host even if the record supplied a playlist url.
+        url=f"https://youtu.be/{video_id}",
         title=_string_or_none(raw.get("title")),
         source_provider=_string_or_none(raw.get("source_provider")),
         playlist_id=_string_or_none(raw.get("playlist_id")),

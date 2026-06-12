@@ -6,7 +6,10 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from vault_yt.manifest import (
+    InvalidRunIdError,
     ManifestItem,
     RunManifest,
     VerificationEvidence,
@@ -19,6 +22,7 @@ from vault_yt.manifest import (
     render_run_report,
     save_manifest,
     update_item_status,
+    validate_run_id,
 )
 
 
@@ -26,6 +30,39 @@ def test_default_manifest_path_lives_under_vault_staging_area(tmp_path: Path) ->
     path = default_manifest_path(tmp_path, "run-123")
 
     assert path == tmp_path / ".vault-lifestyle" / "youtube" / "runs" / "run-123" / "manifest.json"
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "../../../../tmp/x",
+        "..",
+        ".",
+        "a/b",
+        "a\\b",
+        "run id with spaces",
+        "",
+        "/abs/path",
+        "foo/../bar",
+    ],
+)
+def test_validate_run_id_rejects_traversal_and_separators(run_id: str) -> None:
+    with pytest.raises(InvalidRunIdError):
+        validate_run_id(run_id)
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    ["run-123", "2026-06-11T183000Z-youtube", "abc.DEF_123", "a"],
+)
+def test_validate_run_id_accepts_safe_labels(run_id: str) -> None:
+    assert validate_run_id(run_id) == run_id
+
+
+def test_default_manifest_path_rejects_traversing_run_id(tmp_path: Path) -> None:
+    """A hostile --run-id must not let the manifest path escape the vault."""
+    with pytest.raises(InvalidRunIdError):
+        default_manifest_path(tmp_path, "../../../../tmp/evil")
 
 
 def test_new_manifest_contains_contract_fields(tmp_path: Path) -> None:
