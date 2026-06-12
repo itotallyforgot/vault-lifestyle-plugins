@@ -8,6 +8,10 @@ pipeline (same shape as the YouTube sibling).
 > setup) only. `vault-spotify recent` ships in Slice 4 (ISSUE-N); the
 > fetcher + writer modules ship in Slices 2 + 3.
 
+Requires Python >= 3.12. Install from the repo root with
+`uv --directory spotify sync` (or `pip install -e ./lib -e ./spotify` in an
+active virtualenv).
+
 ## One-time setup (per user)
 
 ### 1. Register a Spotify Developer app

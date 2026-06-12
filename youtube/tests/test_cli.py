@@ -83,8 +83,41 @@ def test_captions_path_writes_raw_file(tmp_path: Path, monkeypatch) -> None:
     assert f"written: {path}" in result.output
     assert path.exists()
     text = path.read_text()
-    assert "transcript_source: yt-dlp" in text
+    # Default meta has manual en captions → kind-tagged source label (L6).
+    assert "transcript_source: yt-dlp-manual" in text
     assert "caption text" in text
+
+
+def test_auto_captions_get_auto_source_label(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    meta = _meta(captions=["en"], caption_kinds={"en": "auto"})
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: meta)
+    monkeypatch.setattr(cli_module, "fetch_captions", lambda url, lang="en": "auto caption text")
+
+    result = runner.invoke(cli_module.app, ["https://youtu.be/abc123", "--vault", str(vault)])
+
+    assert result.exit_code == 0
+    assert "transcript_source: yt-dlp-auto" in _raw_path(vault, meta).read_text()
+
+
+def test_missing_requested_language_warns_before_whisper(tmp_path: Path, monkeypatch) -> None:
+    vault = _vault(tmp_path)
+    # Captions exist, but only in fr/es — requested en is absent.
+    meta = _meta(captions=["fr", "es"], caption_kinds={"fr": "manual", "es": "auto"})
+    monkeypatch.setattr(cli_module, "fetch_meta", lambda url: meta)
+    monkeypatch.setattr(cli_module, "download_audio", lambda url, dest_dir: dest_dir / "audio.m4a")
+    monkeypatch.setattr(
+        cli_module,
+        "transcribe_audio",
+        lambda audio, model="base", language=None, verbose=False: _whisper("whisper text"),
+    )
+
+    result = runner.invoke(cli_module.app, ["https://youtu.be/abc123", "--vault", str(vault)])
+
+    assert result.exit_code == 0
+    assert "no 'en' captions" in result.output
+    assert "es, fr" in result.output  # sorted available languages
+    assert "transcript_source: whisper-base" in _raw_path(vault, meta).read_text()
 
 
 def test_transcript_language_selects_non_english_captions(tmp_path: Path, monkeypatch) -> None:

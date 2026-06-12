@@ -15,10 +15,20 @@ from typing import Any, Literal
 
 from raw_writer import RawWriterError, build_raw_markdown, write_raw_file
 
-TranscriptSource = Literal["yt-dlp", "whisper-tiny", "whisper-base", "whisper-small"]
+TranscriptSource = Literal[
+    "yt-dlp",
+    "yt-dlp-manual",
+    "yt-dlp-auto",
+    "whisper-tiny",
+    "whisper-base",
+    "whisper-small",
+]
 
 _VALID_TRANSCRIPT_SOURCES: tuple[str, ...] = (
+    # "yt-dlp" retained for back-compat; new writes carry the caption kind.
     "yt-dlp",
+    "yt-dlp-manual",
+    "yt-dlp-auto",
     "whisper-tiny",
     "whisper-base",
     "whisper-small",
@@ -46,8 +56,9 @@ def build_raw_md(
             None).
         transcript: Plain transcript text, already paragraph-broken by the
             extractor / whisper resolver. Written as-is to the body.
-        transcript_source: One of ``"yt-dlp"``, ``"whisper-tiny"``,
-            ``"whisper-base"``, ``"whisper-small"``. Validated up-front.
+        transcript_source: One of ``"yt-dlp"``, ``"yt-dlp-manual"``,
+            ``"yt-dlp-auto"``, ``"whisper-tiny"``, ``"whisper-base"``,
+            ``"whisper-small"``. Validated up-front.
         clipped_at: Override the current-time stamp — provided for
             deterministic tests. Defaults to ``datetime.now(UTC)``.
 
