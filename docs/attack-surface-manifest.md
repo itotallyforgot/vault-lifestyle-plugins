@@ -280,13 +280,13 @@ package exposes importable functions consumed by integration plug-ins.
 | Direction | ingest (the only direct vault-write helper in this codebase). |
 | Inputs | `frontmatter: Mapping[str, Any]` (caller-built dict); `body: str` (caller-built transcript or content); `path: Path` (caller-chosen destination); `force: bool`. |
 | Auth assumptions | None. |
-| Side effects | Validates frontmatter against `frontmatter_schema.Frontmatter` (Pydantic). Atomically writes the markdown via `tempfile.mkstemp` + `tmp_path.replace(path)`. Creates parent dirs. Refuses writes outside a `raw/` parent: `_ensure_raw_destination` enforces `path.parent.name == "raw"`. |
+| Side effects | Validates frontmatter against `frontmatter_schema.Frontmatter` (Pydantic). Writes the markdown crash-atomically **and durably** via `tempfile.mkstemp` → `fsync(file)` → `tmp_path.replace(path)` → `fsync(parent dir)` (L6; the directory fsync is best-effort). Creates parent dirs. Refuses writes outside a `raw/` parent: `_ensure_raw_destination` resolves the parent (following symlinks), requires the resolved name to be `raw`, and asserts the resolved file is a direct child (L6). |
 | Filesystem access | Writes: the destination path. Creates: a sibling temp file in the same dir (for atomic replace). |
 | Network access | None. |
 | Trust boundary | Frontmatter values flow through Pydantic; YAML is serialized via `yaml.safe_dump` (no `!!python/object` etc). Body text is written verbatim. |
 | Lethal-trifecta exposure | No (no untrusted-input leg by itself; no exfil). |
 | Safe test payload | `lib/tests/test_raw_writer.py` covers the happy path + collision + validation failure. |
-| Misuse / abuse cases | — Caller composes a body containing markdown image refs pointing at attacker servers → vault page renders an HTTP-tracked image when viewed in Obsidian. **P2.** Mitigation: downstream `/vault ingest` is the trust gate for body content; not this layer.<br>— Caller bypasses `_ensure_raw_destination` by passing a path whose parent is named `raw/` but is symlinked outside the vault: the helper does not call `resolve()` on the parent. **P2.** |
+| Misuse / abuse cases | — Caller composes a body containing markdown image refs pointing at attacker servers → vault page renders an HTTP-tracked image when viewed in Obsidian. **P2.** Mitigation: downstream `/vault ingest` is the trust gate for body content; not this layer.<br>— Caller bypasses `_ensure_raw_destination` by passing a path whose parent is named `raw/` but is symlinked outside the vault. **Mitigated (L6):** the helper now resolves the parent before the name check, so a `raw` symlink to a differently-named directory is rejected, and the resolved file must be a direct child of the resolved `raw/`. |
 
 ### lib/frontmatter_schema.validate_frontmatter
 
