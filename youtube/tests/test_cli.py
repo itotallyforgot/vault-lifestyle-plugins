@@ -109,7 +109,7 @@ def test_missing_requested_language_warns_before_whisper(tmp_path: Path, monkeyp
     monkeypatch.setattr(
         cli_module,
         "transcribe_audio",
-        lambda audio, model="base", language=None, verbose=False: "whisper text",
+        lambda audio, model="base", language=None, verbose=False: _whisper("whisper text"),
     )
 
     result = runner.invoke(cli_module.app, ["https://youtu.be/abc123", "--vault", str(vault)])

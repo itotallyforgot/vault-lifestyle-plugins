@@ -214,7 +214,7 @@ The generated frontmatter includes the fields the vault expects:
 source_url: "https://youtu.be/<id>"
 source_kind: youtube
 clipped_at: "YYYY-MM-DDTHH:MM:SSZ"
-transcript_source: yt-dlp
+transcript_source: yt-dlp-manual
 ingested: false
 ingested_at: null
 wiki_page: null
@@ -234,8 +234,9 @@ playlist_url: "https://www.youtube.com/playlist?list=..."
 playlist_index: 1
 ```
 
-Whisper output uses `transcript_source: whisper-base`,
-`whisper-tiny`, or `whisper-small`.
+Caption output uses `transcript_source: yt-dlp-manual` for human-authored
+subtitles or `yt-dlp-auto` for auto-generated ones. Whisper output uses
+`transcript_source: whisper-base`, `whisper-tiny`, or `whisper-small`.
 
 ## Exit Codes
 
