@@ -11,6 +11,8 @@ captions. Captions and Whisper language hinting default to English; pass
 
 ## Install
 
+Requires Python >= 3.12.
+
 From the repo root, with uv:
 
 ```bash

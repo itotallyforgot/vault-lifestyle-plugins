@@ -29,7 +29,15 @@ def build_raw_markdown(frontmatter: Mapping[str, Any], body: str) -> str:
 
 
 def write_raw_file(path: Path, content: str, force: bool = False) -> Path:
-    """Atomically write content to a vault raw destination."""
+    """Atomically and durably write content to a vault raw destination.
+
+    The write is both crash-atomic (write to a sibling temp file, then
+    `os.replace`, so a reader never sees a half-written page) and durable
+    (`fsync` the file before the rename and `fsync` the parent directory after,
+    so the rename itself survives a power loss). Best-effort on the directory
+    fsync — some filesystems (e.g. certain network mounts) reject it; an
+    unsupported fsync must not fail an otherwise-complete write.
+    """
     path = Path(path)
     _ensure_raw_destination(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -42,7 +50,10 @@ def write_raw_file(path: Path, content: str, force: bool = False) -> Path:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
         tmp_path.replace(path)
+        _fsync_dir(path.parent)
     except BaseException:
         with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
@@ -51,9 +62,42 @@ def write_raw_file(path: Path, content: str, force: bool = False) -> Path:
     return path
 
 
+def _fsync_dir(directory: Path) -> None:
+    """fsync a directory so a rename into it is durably recorded. Best-effort.
+
+    Directory fsync is unsupported on some platforms/filesystems (raises
+    OSError); swallow that rather than failing a write whose data is already
+    fsync'd. The file-level fsync above is the load-bearing guarantee.
+    """
+    try:
+        dir_fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dir_fd)
+
+
 def _ensure_raw_destination(path: Path) -> None:
-    if path.parent.name != "raw":
+    """Reject writes that don't land directly inside a real `raw/` directory.
+
+    Resolves the parent (following symlinks) so a `raw` symlink pointing at a
+    differently-named directory can't be used to escape the intended write
+    boundary, then asserts the resolved file sits directly inside that resolved
+    `raw/` directory.
+    """
+    resolved_parent = path.parent.resolve()
+    if resolved_parent.name != "raw":
         raise RawWriterError(f"raw ingest writes must target a file directly under raw/: {path}")
+    # The fully-resolved destination must be a direct child of the resolved
+    # raw/ dir — catches `..` segments and symlinked file names that would
+    # otherwise land the write outside raw/.
+    resolved_file = (resolved_parent / path.name).resolve()
+    if resolved_file.parent != resolved_parent:
+        raise RawWriterError(f"raw ingest path escapes its raw/ directory: {path}")
 
 
 def _serialize_frontmatter(fm: Mapping[str, Any]) -> str:

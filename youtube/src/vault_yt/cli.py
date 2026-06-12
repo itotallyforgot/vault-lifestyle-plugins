@@ -670,8 +670,16 @@ def _resolve_transcript(
         _debug(verbose, "fetching captions")
         transcript = _with_network_retry(fetch_captions, url, transcript_language, verbose=verbose)
         if transcript and transcript.strip():
-            return _Transcript(text=transcript, source="yt-dlp")
+            return _Transcript(
+                text=transcript,
+                source=_caption_source_label(meta, transcript_language),
+            )
         _debug(verbose, "captions empty, falling back to whisper")
+    elif not force_whisper:
+        # choose_transcript_source picked whisper despite captions not being
+        # force-disabled — i.e. the requested language is absent. Surface that
+        # to the operator before the (slower, lossier) Whisper fallback runs.
+        _notify_language_unavailable(meta, transcript_language)
 
     _debug(verbose, f"using whisper model {model}")
     with tempfile.TemporaryDirectory() as td:
@@ -683,6 +691,31 @@ def _resolve_transcript(
             verbose=verbose,
         )
     return _Transcript(text=result.text, source=f"whisper-{model}", quality=result.quality)
+
+
+def _caption_source_label(meta: VideoMeta, lang: str) -> str:
+    """Map the selected caption language to a kind-tagged transcript source.
+
+    `yt-dlp-manual` when the chosen language has human-authored subtitles,
+    `yt-dlp-auto` when it only has auto-generated ones. Falls back to the bare
+    `yt-dlp` label if the kind is unknown (legacy/minimal meta)."""
+    kind = meta.get("caption_kinds", {}).get(lang)
+    if kind == "manual":
+        return "yt-dlp-manual"
+    if kind == "auto":
+        return "yt-dlp-auto"
+    return "yt-dlp"
+
+
+def _notify_language_unavailable(meta: VideoMeta, lang: str) -> None:
+    """Warn on stderr that the requested caption language isn't available."""
+    available = sorted(meta.get("caption_kinds", {}) or meta.get("captions", []))
+    available_str = ", ".join(available) if available else "none"
+    typer.echo(
+        f"notice: no '{lang}' captions for this video (available: {available_str}); "
+        "falling back to Whisper.",
+        err=True,
+    )
 
 
 def _with_network_retry[T](
