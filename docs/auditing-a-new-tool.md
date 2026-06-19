@@ -112,7 +112,8 @@ Format each case as: brief scenario → mitigation status → severity tag.
 Severity vocabulary in the manifest header.
 
 If a tool genuinely has no misuse risk (read-only public API call, pure
-function with no I/O), say so honestly. The acceptance criterion in ISSUE-N
+function with no I/O), say so honestly. The acceptance criterion for the
+attack-surface manifest
 is "do not invent risks" — empty manifest rows that say "none" are honest.
 Filled rows that fabricate misuse to look thorough are not.
 
@@ -160,6 +161,32 @@ If the manifest section ended up with any P0 or P1 misuse cases:
 
 Do not block the PR on the security review — the manifest is the
 durable artifact; the ticket schedules the deep dive.
+
+### 6a. If the tool is a bulk enumerator: does it fail closed?
+
+A bulk enumerator resolves a remote collection (playlist, listening history,
+channel, saved list) into local work items. These share a dangerous failure
+mode covered by [ADR-0005](./adr/0005-bulk-enumerators-count-verified-fail-closed.md):
+a failed or truncated resolve looks like a clean, smaller result.
+
+Ask explicitly:
+
+- **Does it fail closed on an incomplete enumeration, or can it report
+  empty-as-success?** A failed resolve, a missing authoritative total, or a
+  paged count that does not match the source's reported total must raise and
+  exit non-zero — never write an empty/partial artifact and exit `0`. (`0 new`
+  must never be able to mean `export failed`.)
+- **Does it verify against the source's authoritative total** (yt-dlp
+  `playlist_count`, a REST `total`) rather than trusting the result, and does it
+  avoid using an unreliable signal (`n_entries` is `None` in flat mode)?
+- **Does a full enumeration avoid self-truncating** — no `--limit` / page cap as
+  a stop condition?
+- **Does it record `expected_count` / `actual_count` / `complete`** somewhere
+  downstream can assert (sidecar, manifest)?
+
+If the tool paginates a remote collection and any answer is "no", that is at
+least a P1 correctness defect — the same class as the original
+`--export-playlist` empty-as-success exit `0`.
 
 ## Composing previously isolated tools
 

@@ -14,6 +14,7 @@ from yt_dlp.cookies import SUPPORTED_BROWSERS
 from vault_yt.handoff import read_handoff
 from vault_yt.ytdlp_playlist_exporter import (
     BrowserSpecError,
+    PlaylistEnumerationError,
     export_playlist_handoff,
     parse_browser_spec,
 )
@@ -68,7 +69,7 @@ def test_parse_browser_spec_rejects_unknown_browser() -> None:
         parse_browser_spec("netscape")
 
 
-def _ytdl_mock(extract_info_return: dict):
+def _ytdl_mock(extract_info_return: dict | None):
     ydl = MagicMock()
     ydl.__enter__.return_value = ydl
     ydl.__exit__.return_value = False
@@ -86,6 +87,7 @@ def test_export_playlist_handoff_writes_jsonl_from_browser_auth(
             "id": "PLENG",
             "title": "Engineering",
             "webpage_url": "https://www.youtube.com/playlist?list=PLENG",
+            "playlist_count": 1,
             "entries": [
                 {
                     "id": "abc123",
@@ -129,7 +131,7 @@ def test_export_playlist_handoff_writes_jsonl_from_browser_auth(
 def test_export_playlist_handoff_uses_cookie_file_when_provided(
     mock_ytdl_class, tmp_path: Path
 ) -> None:
-    cls, _ = _ytdl_mock({"id": "PLENG", "entries": []})
+    cls, _ = _ytdl_mock({"id": "PLENG", "playlist_count": 0, "entries": []})
     mock_ytdl_class.return_value = cls.return_value
     cookies = tmp_path / "cookies.txt"
     cookies.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
@@ -175,7 +177,7 @@ def test_every_opts_key_is_a_real_youtubedl_param(
     """Parity guard: every option key the exporter hands YoutubeDL must be a
     real, documented parameter. A silently-ignored key (the L1 `cookies`
     no-op) would fail here regardless of which auth mode set it."""
-    cls, _ = _ytdl_mock({"id": "PLENG", "entries": []})
+    cls, _ = _ytdl_mock({"id": "PLENG", "playlist_count": 0, "entries": []})
     mock_ytdl_class.return_value = cls.return_value
 
     call_kwargs = dict(kwargs)
@@ -194,3 +196,174 @@ def test_every_opts_key_is_a_real_youtubedl_param(
     documented = _documented_youtubedl_params()
     unknown = set(opts) - documented
     assert not unknown, f"exporter set non-YoutubeDL opts keys: {sorted(unknown)}"
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed enumeration guard (empty/partial must never report as success).
+# A bulk enumerator must verify records against the authoritative total and
+# raise on any incomplete/failed resolve — never write an empty handoff and
+# return as if it succeeded.
+# ---------------------------------------------------------------------------
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_export_raises_on_resolve_failure_instead_of_empty_success(
+    mock_ytdl_class, tmp_path: Path
+) -> None:
+    """A private playlist with no/expired cookies makes yt-dlp (under
+    ignoreerrors) return None. The exporter must raise, not write an empty
+    handoff and return its path."""
+    cls, _ = _ytdl_mock(None)
+    mock_ytdl_class.return_value = cls.return_value
+    output = tmp_path / "engineering.jsonl"
+
+    with pytest.raises(PlaylistEnumerationError):
+        export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+    assert not output.exists(), "no handoff file may be written on resolve failure"
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_export_raises_when_count_positive_but_zero_records(
+    mock_ytdl_class, tmp_path: Path
+) -> None:
+    """yt-dlp reports an authoritative count but returns no entries (a partial
+    auth/resolve masquerade). 0 records for a non-zero playlist is a failed
+    enumeration, not an empty playlist."""
+    cls, _ = _ytdl_mock({"id": "PLENG", "playlist_count": 5, "entries": []})
+    mock_ytdl_class.return_value = cls.return_value
+    output = tmp_path / "engineering.jsonl"
+
+    with pytest.raises(PlaylistEnumerationError):
+        export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+    assert not output.exists()
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_export_raises_on_truncated_enumeration(mock_ytdl_class, tmp_path: Path) -> None:
+    """Pagination truncation: yt-dlp reports 166 total but only 3 entries came
+    back. YouTube orders playlists date-added-ascending, so the dropped tail is
+    exactly the newest videos — the silent-truncation failure this guard exists
+    to catch."""
+    entries = [
+        {"id": f"vid{n:08d}", "title": f"v{n}", "url": f"vid{n:08d}", "playlist_index": n}
+        for n in range(1, 4)
+    ]
+    cls, _ = _ytdl_mock({"id": "PLENG", "playlist_count": 166, "entries": entries})
+    mock_ytdl_class.return_value = cls.return_value
+    output = tmp_path / "engineering.jsonl"
+
+    with pytest.raises(PlaylistEnumerationError, match="3 of 166"):
+        export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+    assert not output.exists()
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_export_raises_when_count_is_missing(mock_ytdl_class, tmp_path: Path) -> None:
+    """No authoritative playlist_count means completeness cannot be proven.
+    Fail closed rather than trust an unverifiable enumeration."""
+    entries = [{"id": "abc123", "title": "First", "url": "abc123", "playlist_index": 1}]
+    cls, _ = _ytdl_mock({"id": "PLENG", "entries": entries})  # no playlist_count
+    mock_ytdl_class.return_value = cls.return_value
+    output = tmp_path / "engineering.jsonl"
+
+    with pytest.raises(PlaylistEnumerationError, match="no authoritative playlist_count"):
+        export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+    assert not output.exists()
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_export_accepts_genuinely_empty_playlist(mock_ytdl_class, tmp_path: Path) -> None:
+    """A real empty playlist (count 0, no entries) is complete, not a failure.
+    0 == 0, so the guard must NOT raise; it writes an empty handoff."""
+    cls, _ = _ytdl_mock({"id": "PLENG", "playlist_count": 0, "entries": []})
+    mock_ytdl_class.return_value = cls.return_value
+    output = tmp_path / "engineering.jsonl"
+
+    export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+    assert output.exists()
+    assert read_handoff(output) == []
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_export_tolerates_deleted_members_without_false_truncation(
+    mock_ytdl_class, tmp_path: Path
+) -> None:
+    """A complete playlist can contain deleted/private members that enumerate
+    with no video_id. Those are paged (so completeness holds: enumerated ==
+    count) but skipped as records. The guard must compare enumerated entries to
+    the count, not resolved records — otherwise a complete export false-fails."""
+    entries = [
+        {"id": "abc123", "title": "Live one", "url": "abc123", "playlist_index": 1},
+        {"title": "[Deleted video]", "playlist_index": 2},  # no id, no usable url
+    ]
+    cls, _ = _ytdl_mock({"id": "PLENG", "playlist_count": 2, "entries": entries})
+    mock_ytdl_class.return_value = cls.return_value
+    output = tmp_path / "engineering.jsonl"
+
+    export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+    items = read_handoff(output)
+    assert [i.video_id for i in items] == ["abc123"]  # the deleted member is dropped
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_export_writes_count_meta_sidecar_on_success(mock_ytdl_class, tmp_path: Path) -> None:
+    """A successful export emits a `<output>.meta.json` sidecar recording the
+    authoritative expected count, how many items were enumerated, how many
+    resolved to usable videos, and complete:true. Downstream asserts on this
+    instead of re-deriving completeness. The sidecar carries only playlist
+    provenance + counts — never credentials."""
+    entries = [
+        {"id": "abc123", "title": "One", "url": "abc123", "playlist_index": 1},
+        {"title": "[Deleted video]", "playlist_index": 2},  # enumerated, not a record
+    ]
+    cls, _ = _ytdl_mock(
+        {"id": "PLENG", "title": "Engineering", "playlist_count": 2, "entries": entries}
+    )
+    mock_ytdl_class.return_value = cls.return_value
+    output = tmp_path / "engineering.jsonl"
+
+    export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+
+    meta_path = Path(str(output) + ".meta.json")
+    assert meta_path.exists(), "successful export must write a .meta.json sidecar"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["expected_count"] == 2
+    assert meta["enumerated_count"] == 2
+    assert meta["actual_count"] == 1
+    assert meta["complete"] is True
+    assert meta["playlist_id"] == "PLENG"
+
+
+@patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
+def test_failed_reexport_does_not_leave_stale_complete_artifacts(
+    mock_ytdl_class, tmp_path: Path
+) -> None:
+    """Re-exporting to a path that already holds a prior SUCCESSFUL export must
+    not let the stale complete:true handoff + sidecar survive a later FAILED
+    resolve. Otherwise 'export failed' silently masquerades as the prior run's
+    success — a stale success mistaken for the current run."""
+    output = tmp_path / "engineering.jsonl"
+    meta = Path(str(output) + ".meta.json")
+
+    # Run 1: a clean success leaves a complete:true handoff + sidecar.
+    cls, _ = _ytdl_mock(
+        {
+            "id": "PLENG",
+            "playlist_count": 1,
+            "entries": [{"id": "abc123", "url": "abc123", "playlist_index": 1}],
+        }
+    )
+    mock_ytdl_class.return_value = cls.return_value
+    export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+    assert output.exists() and meta.exists()
+    assert json.loads(meta.read_text(encoding="utf-8"))["complete"] is True
+
+    # Run 2: same output path, resolve now fails (e.g. expired cookies).
+    cls2, _ = _ytdl_mock(None)
+    mock_ytdl_class.return_value = cls2.return_value
+    with pytest.raises(PlaylistEnumerationError):
+        export_playlist_handoff("https://www.youtube.com/playlist?list=PLENG", output)
+
+    # The prior run's success artifacts must NOT survive the failed re-export.
+    assert not meta.exists(), "stale complete:true sidecar survived a failed re-export"
+    assert not output.exists(), "stale handoff survived a failed re-export"

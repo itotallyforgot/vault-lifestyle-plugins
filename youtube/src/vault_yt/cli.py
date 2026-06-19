@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -54,7 +55,12 @@ from vault_yt.whisper_fallback import (
     transcribe_audio,
 )
 from vault_yt.writer import WriterError, build_raw_md, write
-from vault_yt.ytdlp_playlist_exporter import BrowserSpecError, export_playlist_handoff
+from vault_yt.ytdlp_playlist_exporter import (
+    BrowserSpecError,
+    PlaylistEnumerationError,
+    export_playlist_handoff,
+    meta_sidecar_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -824,7 +830,34 @@ def _export_playlist(
         )
     except BrowserSpecError as e:
         _fail(2, f"browser cookie error: {e}")
-    typer.echo(f"handoff written: {written}")
+    except PlaylistEnumerationError as e:
+        # Fail closed: an incomplete/failed enumeration must never look like a
+        # clean "handoff written" success. Exit 11 so callers can distinguish
+        # "export failed" from "playlist genuinely empty".
+        _fail(11, f"playlist enumeration incomplete: {e}")
+    typer.echo(_export_summary(written))
+
+
+def _export_summary(handoff_path: Path) -> str:
+    """One-line export summary, enriched with the completeness counts when the
+    exporter wrote a sidecar. Degrades to the bare path if no sidecar is present
+    (e.g. a third-party adapter that does not emit one)."""
+    base = f"handoff written: {handoff_path}"
+    try:
+        meta = json.loads(meta_sidecar_path(handoff_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return base
+    actual = meta.get("actual_count")
+    expected = meta.get("expected_count")
+    state = "complete" if meta.get("complete") else "INCOMPLETE"
+    line = f"{base} — {actual} videos, {expected} playlist items ({state})"
+    # A complete enumeration can still resolve to zero usable videos when every
+    # member is private/deleted (ADR-0005 accepts actual < expected). That is a
+    # valid export but an empty one — surface it so it is not mistaken for a
+    # healthy result the operator can ingest.
+    if actual == 0 and isinstance(expected, int) and expected > 0:
+        line += " — WARNING: 0 resolved to videos (all members private/deleted?)"
+    return line
 
 
 def _validate_handoff(path: Path) -> None:

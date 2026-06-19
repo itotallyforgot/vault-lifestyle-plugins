@@ -1,6 +1,6 @@
 # YouTube Bulk Ingest Contract
 
-Agent-readable contract for ISSUE-N.
+Agent-readable contract for the YouTube bulk-ingest pipeline.
 
 ## Goal
 
@@ -207,6 +207,17 @@ write handoff JSONL. It may use either:
 This command resolves playlist membership only. It does not write raw pages,
 create findings, or store credentials in manifests. Browser cookies and cookie
 files are account secrets and must stay outside git and vault content.
+
+Per ADR-0005, this exporter is a count-verified bulk enumerator. It captures
+yt-dlp's authoritative `playlist_count` and **fails closed** (exit `11`, nothing
+written) on a failed/empty resolve, a missing count, or a paged total that does
+not match `playlist_count`. On success it writes the handoff JSONL **plus a
+`<output>.meta.json` sidecar** recording `expected_count`, `enumerated_count`,
+`actual_count`, and `complete`, and the CLI summary prints expected-vs-got, for
+example `handoff written: engineering.jsonl — 164 videos, 166 playlist items
+(complete)`. Downstream should assert on the sidecar's `complete` /
+`expected_count`, not infer completeness from the file being non-empty. A
+genuinely empty playlist (`expected_count: 0`) is complete and valid.
 
 ## Candidate Findings Handoff
 

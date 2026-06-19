@@ -152,7 +152,13 @@ yt-dlp-cookies
 custom-youtube-cli
 ```
 
-The built-in exporter follows this style:
+The built-in exporter follows this style **and is itself bound by the
+fail-closed rule below** — the contract is not only for third-party adapters.
+Per ADR-0005 it captures yt-dlp's authoritative `playlist_count`, raises
+`PlaylistEnumerationError` (CLI exit `11`, nothing written) on a failed/empty
+resolve, a missing count, or `enumerated != playlist_count`, and on success
+writes a `<output>.meta.json` sidecar with `expected_count` / `enumerated_count`
+/ `actual_count` / `complete`:
 
 ```bash
 uv --directory youtube run vault-yt \
@@ -216,9 +222,17 @@ uv --directory youtube run vault-yt \
 
 ## Failure Semantics
 
-Adapters should fail closed. If they cannot enumerate a playlist completely,
-they should not emit a partial file unless the output clearly represents an
-operator-approved parcel.
+Adapters — **including the built-in `--export-playlist` exporter** — must fail
+closed (ADR-0005). If a tool cannot enumerate a playlist completely, it must not
+emit a partial file unless the output clearly represents an operator-approved
+parcel, and it must exit non-zero rather than report empty-as-success. The
+built-in exporter enforces this by comparing the items it paged to yt-dlp's
+authoritative `playlist_count`; it exits `11` on any mismatch or failed resolve.
+
+A bulk enumerator that emits a `.meta.json` sidecar should set `complete: true`
+only when the enumerated count equals the authoritative total. Downstream
+consumers should assert on `complete` and `expected_count` instead of trusting
+that a non-empty handoff means a complete one.
 
 `vault-yt --validate-handoff` fails if:
 
