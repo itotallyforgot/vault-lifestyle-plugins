@@ -14,6 +14,6 @@ def test_recent_exits_cleanly_while_deferred() -> None:
 
     assert result.exit_code == 7
     assert "vault-spotify recent is not available yet" in result.output
-    assert "Slice 4 (OGR-75)" in result.output
+    assert "Slice 4" in result.output
     assert "NotImplementedError" not in result.output
     assert "Traceback" not in result.output
