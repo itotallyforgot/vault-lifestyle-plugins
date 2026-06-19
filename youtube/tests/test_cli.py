@@ -986,7 +986,7 @@ def test_add_evidence_updates_manifest(tmp_path: Path) -> None:
             "--evidence-url",
             "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
             "--verifier",
-            "George",
+            "testing",
             "--verification-result",
             "accepted",
             "--vault",
@@ -999,3 +999,102 @@ def test_add_evidence_updates_manifest(tmp_path: Path) -> None:
     assert "added evidence: abc123-finding-1 accepted" in result.output
     assert updated.items[0].verification_state == "complete"
     assert updated.items[0].candidate_findings[0].verification_status == "accepted"
+
+
+def test_export_playlist_fails_closed_on_incomplete_enumeration(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """When the exporter raises PlaylistEnumerationError (failed/truncated
+    resolve), the cli must exit non-zero and must NOT print 'handoff written'.
+    The original defect exited 0 with 'handoff written' on a failed export, so
+    '0 new' could silently mean 'export failed'."""
+    from vault_yt.ytdlp_playlist_exporter import PlaylistEnumerationError
+
+    output = tmp_path / "engineering.jsonl"
+
+    def boom(playlist_url, output_path, *, browser=None, cookies=None, verbose=False):
+        raise PlaylistEnumerationError("paged 3 of 166 items (pagination truncated?)")
+
+    monkeypatch.setattr(cli_module, "export_playlist_handoff", boom)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--export-playlist",
+            "https://www.youtube.com/playlist?list=PLENG",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 11
+    assert "handoff written" not in result.output
+    assert not output.exists()
+
+
+def test_export_playlist_summary_includes_completeness_counts(tmp_path: Path, monkeypatch) -> None:
+    """On success the cli surfaces expected-vs-got counts from the sidecar, so
+    the operator sees completeness at a glance instead of a bare path."""
+    from vault_yt.ytdlp_playlist_exporter import meta_sidecar_path
+
+    output = tmp_path / "engineering.jsonl"
+
+    def stub(playlist_url, output_path, *, browser=None, cookies=None, verbose=False):
+        output_path.write_text(
+            '{"video_id":"abc123","url":"https://youtu.be/abc123"}\n', encoding="utf-8"
+        )
+        meta_sidecar_path(output_path).write_text(
+            '{"expected_count": 3, "enumerated_count": 3, "actual_count": 3, "complete": true}',
+            encoding="utf-8",
+        )
+        return output_path
+
+    monkeypatch.setattr(cli_module, "export_playlist_handoff", stub)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--export-playlist",
+            "https://www.youtube.com/playlist?list=PLENG",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "3 videos" in result.output
+    assert "3 playlist items" in result.output
+    assert "(complete)" in result.output
+
+
+def test_export_playlist_summary_warns_when_zero_resolved(tmp_path: Path, monkeypatch) -> None:
+    """A complete-but-all-private playlist (expected > 0, actual 0) is a valid
+    empty export; the summary must warn so it is not mistaken for healthy
+    output."""
+    from vault_yt.ytdlp_playlist_exporter import meta_sidecar_path
+
+    output = tmp_path / "engineering.jsonl"
+
+    def stub(playlist_url, output_path, *, browser=None, cookies=None, verbose=False):
+        output_path.write_text("", encoding="utf-8")
+        meta_sidecar_path(output_path).write_text(
+            '{"expected_count": 3, "enumerated_count": 3, "actual_count": 0, "complete": true}',
+            encoding="utf-8",
+        )
+        return output_path
+
+    monkeypatch.setattr(cli_module, "export_playlist_handoff", stub)
+
+    result = runner.invoke(
+        cli_module.app,
+        [
+            "--export-playlist",
+            "https://www.youtube.com/playlist?list=PLENG",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "WARNING" in result.output
+    assert "0 resolved" in result.output
