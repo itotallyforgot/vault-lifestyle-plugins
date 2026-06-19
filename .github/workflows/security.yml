@@ -18,7 +18,7 @@ concurrency:
 jobs:
   # Scorecard's checkout step fails with "Repository not found" on private
   # repos — the default GITHUB_TOKEN can't reach the cross-org Scorecard
-  # service. Gate on visibility=public until OGR-16 flips this repo public.
+  # service. Gate on visibility=public so it no-ops while the repo is private.
   scorecard:
     if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
@@ -39,8 +39,8 @@ jobs:
           publish_results: false
 
   # dependency-review requires GitHub Advanced Security on private repos.
-  # Gated on visibility=public so the job is a no-op until OGR-16 flips
-  # this repo public.
+  # Gated on visibility=public so the job is a no-op while the repo is
+  # private.
   dependency-review:
     if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest

@@ -1,6 +1,6 @@
 <!--
-PR title format: `[OGR-N] <conventional-commit-subject>`
-Linear auto-links + auto-closes OGR-N on merge.
+PR title: use the Conventional Commit subject, e.g. `fix(youtube): ...`.
+Link any related GitHub issue below.
 -->
 
 ## Summary
@@ -8,15 +8,14 @@ Linear auto-links + auto-closes OGR-N on merge.
 <!-- 1-3 bullets: what changed and why -->
 -
 
-## Linear
+## Related issue
 
-- Closes OGR-N
-- Slice plan reference: `second-brain/_ops/2026-05-04-youtube-ingester-plan.md` § Slice N (if applicable)
-- Spec reference: `second-brain/_ops/2026-05-04-youtube-ingester-spec.md` (if applicable)
+<!-- e.g. Closes #123, or "none" -->
+-
 
 ## Verify
 
-<!-- Match the slice's verify line from the plan doc. Paste the actual command + observed output. -->
+<!-- Paste the actual command + observed output that proves the change works. -->
 
 ```
 $ <command>
@@ -34,5 +33,3 @@ $ <command>
 ## Risks / open questions
 
 <!-- Anything that should block merge or warrant a follow-up issue. None is OK; explicitly say so. -->
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)

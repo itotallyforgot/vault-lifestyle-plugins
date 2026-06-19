@@ -6,7 +6,7 @@ the import of this module; keeps the rest of `vault_yt` importable on
 captions-only installs.
 
 Failure modes use a `kind`-discriminator pattern matching `extractor.ExtractorError`,
-so the CLI (Slice 5 / OGR-9) can map cleanly to the spec's exit codes:
+so the CLI can map cleanly to the spec's exit codes:
 
 | spec exit | failure mode                          | exception                                       |
 |-----------|---------------------------------------|-------------------------------------------------|
