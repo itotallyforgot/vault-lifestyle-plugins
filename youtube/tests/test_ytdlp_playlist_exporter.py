@@ -23,14 +23,18 @@ from vault_yt.ytdlp_playlist_exporter import (
 def _documented_youtubedl_params() -> set[str]:
     """Real YoutubeDL option names, parsed from its `__init__` param docstring.
 
-    yt-dlp documents each accepted programmatic option as an indented
-    ``name:  description`` line in the ``YoutubeDL`` class docstring. Anything
-    not in this set is silently ignored by yt-dlp at runtime.
+    yt-dlp documents each accepted programmatic option as a column-aligned
+    ``name:  description`` line in the ``YoutubeDL`` class docstring. The leading
+    indentation has shifted across yt-dlp releases (e.g. it was 4-space indented
+    historically and dedented to column 0 by 2026.6.9), so this matches any
+    leading indent and keys off the snake_case name plus the 2+ aligned spaces
+    after the colon. Anything not in this set is silently ignored by yt-dlp at
+    runtime.
     """
     doc = YoutubeDL.__doc__ or ""
     names: set[str] = set()
     for line in doc.splitlines():
-        match = re.match(r"^\s{4}([a-z_][a-z0-9_]*):\s", line)
+        match = re.match(r"^\s*([a-z_][a-z0-9_]*):\s{2,}\S", line)
         if match:
             names.add(match.group(1))
     return names
