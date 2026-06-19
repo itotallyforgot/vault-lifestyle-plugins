@@ -5,7 +5,7 @@ Per-track ingester for Spotify recently-played history. Deposits
 pipeline (same shape as the YouTube sibling).
 
 > **MVP — Slice 1 of 5.** This README covers Slice 1 (one-time auth
-> setup) only. `vault-spotify recent` ships in Slice 4 (ISSUE-N); the
+> setup) only. `vault-spotify recent` ships in Slice 4; the
 > fetcher + writer modules ship in Slices 2 + 3.
 
 Requires Python >= 3.12. Install from the repo root with
@@ -64,13 +64,13 @@ box you use needs its own `vault-spotify auth` invocation.
 
 ## Status
 
-| Slice | Module | Issue | Status |
-|---|---|---|---|
-| 1 | `auth` (CLIENT_ID resolution + OAuth dance) | ISSUE-N | **this slice** |
-| 2 | `client` + `models` (spotipy wrapper, PlayEvent type) | ISSUE-N | next |
-| 3 | `slug` + `writer` (raw/<slug>.md per play event) | ISSUE-N | follows |
-| 4 | `cli` + idempotency (`vault-spotify recent`) | ISSUE-N | follows |
-| 5 | CI lane + final polish | ISSUE-N | follows |
+| Slice | Module | Status |
+|---|---|---|
+| 1 | `auth` (CLIENT_ID resolution + OAuth dance) | **this slice** |
+| 2 | `client` + `models` (spotipy wrapper, PlayEvent type) | next |
+| 3 | `slug` + `writer` (raw/<slug>.md per play event) | follows |
+| 4 | `cli` + idempotency (`vault-spotify recent`) | follows |
+| 5 | CI lane + final polish | follows |
 
 ## What's importable today
 
@@ -87,11 +87,11 @@ from vault_spotify.auth import (
 
 ## What's NOT in this slice
 
-- `vault-spotify recent` — Slice 4 (ISSUE-N). Currently prints a clean
+- `vault-spotify recent` — Slice 4. Currently prints a clean
   deferred-feature message and exits with code `7`.
-- Spotipy client wrapper + Pydantic models — Slice 2 (ISSUE-N).
-- Slug + writer — Slice 3 (ISSUE-N).
-- CI lane — Slice 5 (ISSUE-N).
+- Spotipy client wrapper + Pydantic models — Slice 2.
+- Slug + writer — Slice 3.
+- CI lane — Slice 5.
 - Cron / bulk-import — post-MVP.
 
 ## Troubleshooting

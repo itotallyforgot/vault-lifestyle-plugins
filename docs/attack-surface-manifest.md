@@ -204,7 +204,7 @@ the "did this composition change the profile?" gate.
 Console script registered in `spotify/pyproject.toml` as
 `vault-spotify = "vault_spotify.cli:main"`. Slice 1 of 5 — currently only
 the `auth` subcommand is functional; `recent` exits with code 7
-intentionally until ISSUE-N.
+intentionally until the recently-played slice ships.
 
 ### vault-spotify auth (plugin: spotify)
 
@@ -234,7 +234,7 @@ intentionally until ISSUE-N.
 | Filesystem access | None today. |
 | Network access | None today. |
 | Trust boundary | n/a today. |
-| Lethal-trifecta exposure | n/a today. **Re-audit before ISSUE-N ships.** That slice will introduce the private-data leg + a per-event vault write that composes most of the trifecta — see the audit checklist's "composing previously isolated tools" gate. |
+| Lethal-trifecta exposure | n/a today. **Re-audit before the recently-played slice ships.** That slice will introduce the private-data leg + a per-event vault write that composes most of the trifecta — see the audit checklist's "composing previously isolated tools" gate. |
 | Safe test payload | `uv --directory spotify run vault-spotify recent` (returns exit 7 with the deferred-feature message). |
 | Misuse / abuse cases | None today. Listed here so the manifest stays current as the feature lands. |
 

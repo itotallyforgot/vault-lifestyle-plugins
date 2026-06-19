@@ -4,29 +4,25 @@ Conventions for working on `vault-lifestyle-plugins`.
 
 ## Workflow
 
-1. **Read first.** Before touching code, skim:
-   - `markdown-vault/internal-notes` — for the YouTube integration's contract.
-   - `markdown-vault/internal-notes` — for the slice plan + verify lines.
-   - `markdown-vault/_ops/activity-log.md` — for in-flight work across parallel sessions.
-   - The relevant Linear issue (OGR-N) for the latest decisions.
-
-2. **Claim before working.** If you have Linear MCP authentication, set yourself as assignee + flip the Linear issue to "In Progress." Otherwise comment on the linked GitHub issue. Append a `claim` block to `activity-log.md` per its conventions.
-
-3. **Branch convention.** `OGR-N-<short-slug>` — e.g. `ISSUE-N-lib-shared-helpers`, `ISSUE-N-whisper-fallback`.
-
-4. **Commit message convention.** Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`, `refactor:`). Reference Linear ID in subject or trailer:
+1. **Read first.** Before touching code, skim `CONTEXT.md` and any relevant
+   ADRs in `docs/adr/` for the decisions behind the area you're changing.
+2. **Track it in an issue.** Open or claim a GitHub issue describing the change
+   before you start, so work isn't duplicated.
+3. **Branch convention.** `<type>/<short-slug>` — e.g. `feat/whisper-fallback`,
+   `fix/caption-glob`.
+4. **Commit message convention.** [Conventional Commits](https://www.conventionalcommits.org/)
+   (`feat:`, `fix:`, `docs:`, `test:`, `chore:`, `refactor:`), scoped to the
+   integration where useful:
 
    ```
-   feat(youtube): caption fetch via yt-dlp (ISSUE-N)
+   feat(youtube): caption fetch via yt-dlp
    ```
 
-5. **PR title convention.** `[OGR-N] <conventional-commit-subject>`. Linear auto-links + auto-closes OGR-N on merge.
-
-6. **PR template.** `.github/PULL_REQUEST_TEMPLATE.md` autopopulates. Match the slice plan's verify line.
-
-7. **CI must pass.** `gitleaks`, `zizmor`, `harden-runner`, `ruff`, `pytest`. No bypass with `--no-verify`.
-
-8. **Release.** Append a `release` block to `activity-log.md` when your slice merges.
+5. **PR title.** Use the Conventional Commit subject. The PR template
+   (`.github/PULL_REQUEST_TEMPLATE.md`) autopopulates — fill in the verify line
+   with the actual command and observed output.
+6. **CI must pass.** `gitleaks`, `zizmor`, `harden-runner`, `ruff`, `pytest`.
+   No bypass with `--no-verify`.
 
 ## Local setup
 
@@ -58,30 +54,26 @@ pre-commit run --all-files
 vault-lifestyle-plugins/
 ├── README.md
 ├── CONTRIBUTING.md           ← this file
+├── CONTEXT.md
 ├── LICENSE
 ├── .gitignore
 ├── .github/
 │   ├── PULL_REQUEST_TEMPLATE.md
-│   └── workflows/            ← CI added by Slice 6 (ISSUE-N)
+│   └── workflows/            ← CI
+├── docs/                     ← contracts, ADRs, runbooks
 ├── lib/                      ← shared utilities (Python; bridge to other runtimes via JSON)
 │   ├── pyproject.toml
-│   ├── vault_resolver.py     ← Slice 1 / ISSUE-N
-│   ├── frontmatter_schema.py ← Slice 1 / ISSUE-N
+│   ├── vault_resolver.py
+│   ├── frontmatter_schema.py
 │   └── schemas/
 │       └── raw_frontmatter.json
-├── youtube/                  ← first integration (Slices 2-5 / ISSUE-N through ISSUE-N)
+├── youtube/                  ← YouTube transcript integration
 │   ├── pyproject.toml
 │   ├── README.md
 │   ├── src/vault_yt/
-│   │   ├── __init__.py
-│   │   ├── extractor.py
-│   │   ├── resolver.py
-│   │   ├── whisper_fallback.py
-│   │   ├── slug.py
-│   │   ├── writer.py
-│   │   └── cli.py
 │   └── tests/
-└── (future)/                 ← spotify/, gmail/, calendar/, rss/, etc.
+├── spotify/                  ← Spotify listening-history integration
+└── (future)/                 ← gmail/, calendar/, rss/, etc.
 ```
 
 ## Per-integration conventions
@@ -117,16 +109,6 @@ Optional but encouraged:
 ## Standalone-vault rule
 
 Vault is sovereign. Plug-ins do not require modifications to markdown-vault's `skills/`, `CLAUDE.md`, or `vault_map.md`. If an integration genuinely needs vault-side changes, raise it as a separate issue against `markdown-vault` first; this repo doesn't drive vault changes.
-
-## Coordination across parallel sessions
-
-This repo is worked on by multiple Claude Code sessions in parallel (PC + Macs). Coordination happens via:
-
-1. **Linear** (`tracker` workspace, team OGR) — live task board with session labels (`session:mac-fresh`, `session:mac-older`, `session:pc`, `session:any`).
-2. **GitHub Issues** — code-attached closure trail (this repo's Issues tab).
-3. **`markdown-vault/_ops/activity-log.md`** — append-only liveness log shared via Obsidian Sync.
-
-See `markdown-vault/_ops/activity-log.md` for the full conventions.
 
 ## Lineage
 

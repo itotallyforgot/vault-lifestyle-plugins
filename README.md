@@ -76,4 +76,4 @@ Companion to:
 - [markdown-vault](https://github.com/itotallyforgot/markdown-vault): the standalone vault this overlays onto.
 - [vault-retrieval-engine](https://github.com/itotallyforgot/vault-retrieval-engine): sister plug-in that adds local retrieval (graph + vector). Independent install.
 
-Per `markdown-vault/internal-notes`, this repo is one of the optional plug-ins layered on top of the standalone vault.
+This repo is one of the optional plug-ins layered on top of the standalone vault.
