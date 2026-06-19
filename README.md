@@ -76,4 +76,4 @@ Companion to:
 - [second-brain](https://github.com/itotallyforgot/second-brain): the standalone vault this overlays onto.
 - [vault-retrieval-engine](https://github.com/itotallyforgot/vault-retrieval-engine): sister plug-in that adds local retrieval (graph + vector). Independent install.
 
-Per `second-brain/_ops/2026-05-04-portfolio-split-migration.md`, this repo is one of the optional plug-ins layered on top of the standalone vault.
+This repo is one of the optional plug-ins layered on top of the standalone vault.

@@ -347,7 +347,7 @@ def test_run_auth_dance_calls_get_access_token(
 def test_run_auth_dance_kwargs_match_real_spotipy_pkce_signature(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Regression for P0 caught in OGR-72 review: `as_dict=False` is a
+    """Regression: `as_dict=False` is a
     SpotifyOAuth kwarg, not SpotifyPKCE's. MagicMock-based tests passed
     because MagicMock accepts any kwargs. `create_autospec` against the
     real `SpotifyPKCE` enforces the actual signature — passing a wrong
