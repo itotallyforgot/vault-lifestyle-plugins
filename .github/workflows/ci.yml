@@ -5,6 +5,11 @@ name: ci
 # own pyproject.toml + uv.lock, so each gets its own caller job pinned to that
 # working-directory. Job ids (ci-lib / ci-youtube / ci-spotify) keep the
 # surfaced check names distinguishable.
+#
+# security-events: write is granted because the reusable's bandit job statically
+# declares that permission. GitHub validates every nested job's requested
+# permissions at startup, before evaluating `if:` gates, so the grant is
+# required even though bandit is disabled (enable-bandit defaults to false).
 
 on:
   push:
@@ -23,6 +28,7 @@ jobs:
   ci-lib:
     permissions:
       contents: read
+      security-events: write
     uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
     with:
       working-directory: lib
@@ -30,6 +36,7 @@ jobs:
   ci-youtube:
     permissions:
       contents: read
+      security-events: write
     uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
     with:
       working-directory: youtube
@@ -37,6 +44,7 @@ jobs:
   ci-spotify:
     permissions:
       contents: read
+      security-events: write
     uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
     with:
       working-directory: spotify
