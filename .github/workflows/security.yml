@@ -4,6 +4,10 @@ name: security
 # Replaces the bespoke gitleaks + zizmor + dependency-review jobs.
 # security-events: write is required so the reusable's zizmor job can upload
 # its SARIF to code scanning.
+# secrets: inherit forwards GITHUB_TOKEN to the reusable; the gitleaks job
+# references secrets.GITHUB_TOKEN, which resolves empty in a called workflow
+# unless the caller inherits secrets, and gitleaks-action refuses to scan
+# pull requests without a token.
 
 on:
   push:
@@ -24,3 +28,4 @@ jobs:
       contents: read
       security-events: write
     uses: itotallyforgot/.github/.github/workflows/security-baseline.yml@v1
+    secrets: inherit
