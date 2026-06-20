@@ -1,12 +1,15 @@
 name: security
 
+# Thin caller for the central reusable security baseline.
+# Replaces the bespoke gitleaks + zizmor + dependency-review jobs.
+# security-events: write is required so the reusable's zizmor job can upload
+# its SARIF to code scanning.
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -16,39 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Scorecard's checkout step fails with "Repository not found" on private
-  # repos — the default GITHUB_TOKEN can't reach the cross-org Scorecard
-  # service. Gate on visibility=public so it no-ops while the repo is private.
-  scorecard:
-    if: github.event.repository.visibility == 'public'
-    runs-on: ubuntu-latest
+  baseline:
     permissions:
+      contents: read
       security-events: write
-      id-token: write
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: ossf/scorecard-action@v2.4.3
-        with:
-          results_file: results.sarif
-          results_format: sarif
-          publish_results: false
-
-  # dependency-review requires GitHub Advanced Security on private repos.
-  # Gated on visibility=public so the job is a no-op while the repo is
-  # private.
-  dependency-review:
-    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/dependency-review-action@v5
+    uses: itotallyforgot/.github/.github/workflows/security-baseline.yml@v1

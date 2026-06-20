@@ -1,5 +1,11 @@
 name: ci
 
+# Thin caller for the central reusable Python CI.
+# Each subdir (lib, youtube, spotify) is its own uv-managed project with its
+# own pyproject.toml + uv.lock, so each gets its own caller job pinned to that
+# working-directory. Job ids (ci-lib / ci-youtube / ci-spotify) keep the
+# surfaced check names distinguishable.
+
 on:
   push:
     branches: [main]
@@ -14,112 +20,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gitleaks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Install gitleaks
-        run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz \
-            | tar -xz -C /usr/local/bin gitleaks
-      - name: Scan history
-        run: gitleaks detect --redact --verbose --no-banner
+  ci-lib:
+    permissions:
+      contents: read
+    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
+    with:
+      working-directory: lib
 
-  zizmor:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - run: pip install zizmor
-      - run: zizmor --config .zizmor.yml .github/workflows
+  ci-youtube:
+    permissions:
+      contents: read
+    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
+    with:
+      working-directory: youtube
 
-  python-lib:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: lib
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - name: Install deps
-        run: uv sync --extra dev
-      - name: Ruff check
-        run: uv run ruff check .
-      - name: Ruff format check
-        run: uv run ruff format --check .
-      - name: Pytest
-        run: uv run pytest -q --tb=short
-
-  python-youtube:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: youtube
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - name: Install deps
-        run: uv sync --extra dev
-      - name: Ruff check
-        run: uv run ruff check .
-      - name: Ruff format check
-        run: uv run ruff format --check .
-      - name: Pytest
-        run: uv run pytest -q --tb=short
-
-  python-spotify:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: spotify
-    steps:
-      - uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - name: Install deps
-        run: uv sync --extra dev
-      - name: Ruff check
-        run: uv run ruff check .
-      - name: Ruff format check
-        run: uv run ruff format --check .
-      - name: Pytest
-        run: uv run pytest -q --tb=short
+  ci-spotify:
+    permissions:
+      contents: read
+    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
+    with:
+      working-directory: spotify
