@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -176,7 +177,7 @@ def test_documented_param_parser_finds_real_cookie_options() -> None:
 )
 @patch("vault_yt.ytdlp_playlist_exporter.YoutubeDL")
 def test_every_opts_key_is_a_real_youtubedl_param(
-    mock_ytdl_class, tmp_path: Path, kwargs: dict[str, str]
+    mock_ytdl_class, tmp_path: Path, kwargs: dict[str, Any]
 ) -> None:
     """Parity guard: every option key the exporter hands YoutubeDL must be a
     real, documented parameter. A silently-ignored key (the L1 `cookies`

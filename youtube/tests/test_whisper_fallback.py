@@ -9,6 +9,7 @@ default (opt-in via `pytest -m whisper`).
 from __future__ import annotations
 
 import builtins
+import shutil
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -286,9 +287,11 @@ def test_whisper_transcription_error_carries_kind_attribute():
 
 
 @pytest.mark.whisper
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_live_transcribe_with_real_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Live transcribe — skipped unless `pytest -m whisper` is invoked AND
-    openai-whisper is installed AND the `base` model is pre-cached."""
+    openai-whisper is installed AND ffmpeg is on PATH AND the `base` model is
+    pre-cached."""
     # Belt-and-suspenders: drop any fake `whisper` left behind by unit tests
     # in the same pytest run (monkeypatch cleanup is reliable but xdist /
     # local-dev workflows can pollute sys.modules across collection passes).

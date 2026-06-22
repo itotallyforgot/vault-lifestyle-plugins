@@ -630,6 +630,7 @@ def test_handoff_batch_processes_items_and_preserves_discovered_titles(
     assert manifest.items[1].title == "Handoff Beta"
     assert manifest.items[1].status == "pending"
 
+    assert manifest.items[0].raw_path is not None
     raw_text = (vault / manifest.items[0].raw_path).read_text()
     assert "youtube_video_id: abc123" in raw_text
     assert "canonical_url: https://youtu.be/abc123" in raw_text
