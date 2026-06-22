@@ -240,7 +240,7 @@ def _fetch_playlist_info(url: str) -> dict[str, Any]:
 
     if not isinstance(info, dict):
         raise InputExpansionError(f"yt-dlp returned no playlist info for {url}")
-    return info
+    return dict(info)
 
 
 def _parse_youtube_input(url: str) -> _ParsedInput:
