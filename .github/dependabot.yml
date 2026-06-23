@@ -3,19 +3,14 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-
+      interval: "daily"
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: "pip"
-    directory: "/lib"
+    directory: "/"
     schedule:
-      interval: "weekly"
-
-  - package-ecosystem: "pip"
-    directory: "/youtube"
-    schedule:
-      interval: "weekly"
-
-  - package-ecosystem: "pip"
-    directory: "/spotify"
-    schedule:
-      interval: "weekly"
+      interval: "daily"
+    groups:
+      python:
+        patterns: ["*"]
