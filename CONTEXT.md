@@ -4,16 +4,16 @@ Agent-readable domain map for `vault-lifestyle-plugins`.
 
 ## Purpose
 
-This repo holds optional lifestyle integration plug-ins for a `second-brain`
-vault. The target vault remains standalone; these plug-ins overlay capability
+This repo holds optional lifestyle integration plug-ins for a markdown vault.
+The target vault remains standalone; these plug-ins overlay capability
 onto it when installed.
 
 ## Domain Language
 
 | Term | Meaning |
 |---|---|
-| vault | A `second-brain`-shaped Obsidian knowledge vault. It owns `raw/`, `wiki/`, vault skills, and vault-side processing rules. |
-| standalone vault | The rule that `second-brain` must work without this repo or any other plug-in installed. |
+| vault | An Obsidian-style knowledge vault (a directory with `raw/`, `wiki/`, etc.). It owns `raw/`, `wiki/`, vault skills, and vault-side processing rules. |
+| standalone vault | The rule that the vault must work without this repo or any other plug-in installed. |
 | plug-in | An independently installable repo or subproject that adds capability to a target vault. |
 | integration | One service-specific plug-in directory, such as `youtube/`, `spotify/`, `gmail/`, or `rss/`. |
 | ingest plug-in | An integration that reads an external source and writes a source page into the vault's `raw/`. |
@@ -24,8 +24,8 @@ onto it when installed.
 
 ## Boundaries
 
-- `second-brain` is sovereign. This repo does not require changes to
-  `second-brain` skills, maps, or harness config.
+- The vault is sovereign. This repo does not require changes to
+  the vault's skills, maps, or harness config.
 - Ingest integrations write only to the target vault's `raw/`.
 - The target vault's `/vault ingest` skill is the writer for `wiki/`.
 - Action integrations act on external services and do not touch the vault.

@@ -11,7 +11,7 @@ Support prompts like:
 > findings into our vault. Do some amount of verification for each important
 > fact you ingest.
 
-This repo owns source capture and handoff. The target `second-brain` vault owns
+This repo owns source capture and handoff. The target vault owns
 final knowledge synthesis and `wiki/` writes.
 
 ## Supported Inputs

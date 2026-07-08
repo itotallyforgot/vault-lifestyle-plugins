@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-- `second-brain` is intended to work as a standalone Obsidian vault.
+- The target vault is intended to work as a standalone Obsidian vault.
 - Lifestyle integrations add useful automation, but not every adopter wants
   every integration.
 - Vault-side skills, maps, and harness config must remain owned by the vault.
@@ -19,8 +19,8 @@ Keep `vault-lifestyle-plugins` as an optional overlay repo.
 - Each plug-in is opt-in.
 - Plug-in plumbing that exists only for an integration lives in this repo or the
   integration's own package.
-- If an integration needs vault-side changes, raise a separate `second-brain`
-  issue first.
+- If an integration needs vault-side changes, raise a separate issue against
+  the vault repo first.
 
 ## Consequences
 
