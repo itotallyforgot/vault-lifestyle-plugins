@@ -8,7 +8,10 @@ updates:
       actions:
         patterns: ["*"]
   - package-ecosystem: "pip"
-    directory: "/"
+    directories:
+      - "/lib"
+      - "/spotify"
+      - "/youtube"
     schedule:
       interval: "daily"
     groups:
