@@ -17,7 +17,7 @@ from vault_spotify.auth import (
 
 app = typer.Typer(
     name="vault-spotify",
-    help="Spotify listening-history ingester for second-brain vaults.",
+    help="Spotify listening-history ingester for markdown vaults.",
     no_args_is_help=True,
 )
 

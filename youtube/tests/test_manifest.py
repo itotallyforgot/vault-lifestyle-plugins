@@ -242,7 +242,7 @@ def test_add_verification_evidence_updates_finding_and_item_state(tmp_path: Path
         finding_id="abc123-finding-1",
         evidence=VerificationEvidence(
             evidence_url="https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
-            verifier="George",
+            verifier="Alex",
             checked_at=checked_at,
             result="accepted",
             notes="Rust Book supports this.",
@@ -282,7 +282,7 @@ def test_add_verification_evidence_can_leave_item_partial(tmp_path: Path) -> Non
         finding_id="abc123-finding-1",
         evidence=VerificationEvidence(
             evidence_url="https://example.com",
-            verifier="George",
+            verifier="Alex",
             checked_at=datetime(2026, 5, 7, 21, 0, tzinfo=UTC),
             result="accepted",
         ),
@@ -318,7 +318,7 @@ def test_candidate_findings_and_evidence_roundtrip_json(tmp_path: Path) -> None:
         finding_id="abc123-finding-1",
         evidence=VerificationEvidence(
             evidence_url="https://example.com",
-            verifier="George",
+            verifier="Alex",
             checked_at=datetime(2026, 5, 7, 21, 0, tzinfo=UTC),
             result="unresolved",
         ),

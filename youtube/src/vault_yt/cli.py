@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     add_completion=False,
-    help="vault-yt: fetch a YouTube transcript into a second-brain raw file.",
+    help="vault-yt: fetch a YouTube transcript into a vault raw file.",
 )
 
 
@@ -103,7 +103,7 @@ def command(
     ] = None,
     vault: Annotated[
         Path | None,
-        typer.Option("--vault", help="Target second-brain vault path."),
+        typer.Option("--vault", help="Target vault path."),
     ] = None,
     force: Annotated[
         bool,
