@@ -1,4 +1,4 @@
-"""Pydantic model + validator for the markdown-vault `raw/` frontmatter contract.
+"""Pydantic model + validator for the vault `raw/` frontmatter contract.
 
 Required minimum (per /vault ingest):
     source_url, clipped_at, ingested: false (all three required, not defaulted)

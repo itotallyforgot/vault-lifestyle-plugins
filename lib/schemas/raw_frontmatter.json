@@ -179,7 +179,7 @@
     "clipped_at",
     "ingested"
   ],
-  "title": "markdown-vault raw/ frontmatter contract",
+  "title": "vault raw/ frontmatter contract",
   "type": "object",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

@@ -1,4 +1,4 @@
-"""Build and write `raw/<slug>.md` files for the markdown-vault vault.
+"""Build and write `raw/<slug>.md` files for the vault.
 
 The writer is the only thing in `vault-yt` that materializes a file under
 `<vault>/raw/`. It composes YouTube-specific frontmatter and delegates the

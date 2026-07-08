@@ -210,14 +210,14 @@ uv --directory youtube run vault-yt \
   --handoff /tmp/engineering-handoff.jsonl \
   --run-id engineering-$(date +%Y-%m-%d) \
   --limit 3 \
-  --vault /path/to/markdown-vault
+  --vault /path/to/vault
 ```
 
 ```bash
 uv --directory youtube run vault-yt \
   --report \
   --run-id engineering-YYYY-MM-DD \
-  --vault /path/to/markdown-vault
+  --vault /path/to/vault
 ```
 
 ## Failure Semantics

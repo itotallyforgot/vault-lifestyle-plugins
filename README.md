@@ -1,10 +1,10 @@
 # vault-lifestyle-plugins
 
-Lifestyle integration plug-ins for [markdown-vault](https://github.com/itotallyforgot/markdown-vault): automate ingestion of insights from daily-use services and later act on toil for you.
+Lifestyle integration plug-ins for a markdown vault: automate ingestion of insights from daily-use services and later act on toil for you.
 
 ## What this is
 
-A monorepo of independently-shippable plug-ins that overlay onto a markdown-vault-shaped vault. Each plug-in:
+A monorepo of independently-shippable plug-ins that overlay onto an Obsidian-style vault (a directory with `raw/`, `wiki/`, etc.). Each plug-in:
 
 - Lives in its own subdirectory with its own runtime (Python, Node, etc.) and dep manifest
 - Reads from external services and writes to the vault's `raw/` (ingest direction)
@@ -25,9 +25,9 @@ A monorepo of independently-shippable plug-ins that overlay onto a markdown-vaul
 
 ## Design rules
 
-- **Plug-in for a standalone vault.** markdown-vault depends on no plug-ins; this repo overlays onto a target vault when installed. The vault works without us; we add capability.
+- **Plug-in for a standalone vault.** The vault depends on no plug-ins; this repo overlays onto a target vault when installed. The vault works without us; we add capability.
 - **Per-integration runtime freedom.** YouTube uses Python (yt-dlp). A future Gmail agent might use Node (better SDK). Each subdir picks its own toolchain.
-- **Output convention.** Every ingest plug-in writes `raw/<slug>.md` with frontmatter compatible with markdown-vault's `/vault ingest` skill (`source_url`, `clipped_at`, `ingested: false` are required; rich optional fields preserved as source-page metadata). Slug shape is per-plug-in (e.g. YouTube uses `<yyyy-mm-dd>-youtube-<video_id>-<sanitized-title>`). The shared `lib/frontmatter_schema.py` Pydantic model + `lib/schemas/raw_frontmatter.json` JSON Schema codify the contract.
+- **Output convention.** Every ingest plug-in writes `raw/<slug>.md` with frontmatter compatible with the vault's `/vault ingest` skill (`source_url`, `clipped_at`, `ingested: false` are required; rich optional fields preserved as source-page metadata). Slug shape is per-plug-in (e.g. YouTube uses `<yyyy-mm-dd>-youtube-<video_id>-<sanitized-title>`). The shared `lib/frontmatter_schema.py` Pydantic model + `lib/schemas/raw_frontmatter.json` JSON Schema codify the contract.
 - **No vault writes outside `raw/`.** Plug-ins ingest sources; the vault's own `/vault ingest` skill is the only writer for `wiki/`. Action-direction plug-ins (email, calendar) DO NOT touch the vault — they act on external services.
 - **Auth handled per integration.** Public sources (YouTube videos, RSS) need none. Personal data (Spotify history, Gmail) goes through OAuth via the integration's local config. No central auth broker; each plug-in owns its own credentials.
 
@@ -73,7 +73,7 @@ Each integration is independently:
 
 Companion to:
 
-- [markdown-vault](https://github.com/itotallyforgot/markdown-vault): the standalone vault this overlays onto.
+- The standalone vault this overlays onto (bring your own — see [Install](#install)).
 - [vault-retrieval-engine](https://github.com/itotallyforgot/vault-retrieval-engine): sister plug-in that adds local retrieval (graph + vector). Independent install.
 
 This repo is one of the optional plug-ins layered on top of the standalone vault.
