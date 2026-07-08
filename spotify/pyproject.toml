@@ -1,7 +1,7 @@
 [project]
 name = "vault-spotify"
 version = "0.1.0"
-description = "Spotify listening-history ingester for second-brain vaults — second plug-in in the vault-lifestyle-plugins family."
+description = "Spotify listening-history ingester for markdown vaults — second plug-in in the vault-lifestyle-plugins family."
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "vault-lifestyle-plugins contributors" }]
@@ -45,6 +45,12 @@ markers = [
     "spotify_auth: tests that hit Spotify OAuth (requires browser; opt-in)",
     "spotify_live: tests that hit Spotify API with live tokens (opt-in)",
 ]
+
+[tool.coverage.run]
+# Measure this plugin's own package only — src/vault_spotify. The uv-managed
+# .venv/ and the sibling lib/ editable path dep sit outside src/, so they are
+# excluded automatically (lib/ owns its own coverage).
+source = ["src"]
 
 [tool.pyright]
 venvPath = "."
