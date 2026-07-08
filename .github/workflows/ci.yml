@@ -32,6 +32,11 @@ jobs:
     uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
     with:
       working-directory: lib
+      # cov-floor gates the coverage the central reusable already measures.
+      # Baseline observed on ubuntu CI: 95.56% (135 stmts, 6 missed). Floor set
+      # just below so real regressions fail without the gate being flaky.
+      # Scoped by [tool.coverage.run] source in lib/pyproject.toml.
+      cov-floor: 95
 
   ci-youtube:
     permissions:
@@ -40,6 +45,9 @@ jobs:
     uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
     with:
       working-directory: youtube
+      # Baseline observed on ubuntu CI: 91.29% (1390 stmts, 121 missed).
+      # Scoped by [tool.coverage.run] source in youtube/pyproject.toml.
+      cov-floor: 90
 
   ci-spotify:
     permissions:
@@ -48,3 +56,6 @@ jobs:
     uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@v1
     with:
       working-directory: spotify
+      # Baseline observed on ubuntu CI: 87.29% (118 stmts, 15 missed).
+      # Scoped by [tool.coverage.run] source in spotify/pyproject.toml.
+      cov-floor: 86

@@ -1,7 +1,7 @@
 [project]
 name = "vault-yt"
 version = "0.1.0"
-description = "On-demand YouTube transcript ingester for markdown-vault vaults: first plug-in in the vault-lifestyle-plugins family."
+description = "On-demand YouTube transcript ingester for markdown vaults: first plug-in in the vault-lifestyle-plugins family."
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "vault-lifestyle-plugins contributors" }]
@@ -49,6 +49,12 @@ markers = [
     "network: tests that hit YouTube over the network (skipped by default)",
     "whisper: tests that require a downloaded Whisper model",
 ]
+
+[tool.coverage.run]
+# Measure this plugin's own package only — src/vault_yt. The uv-managed
+# .venv/ and the sibling lib/ editable path dep sit outside src/, so they are
+# excluded automatically (lib/ owns its own coverage).
+source = ["src"]
 
 [tool.pyright]
 venvPath = "."

@@ -36,6 +36,13 @@ py-modules = ["vault_resolver", "frontmatter_schema", "raw_writer"]
 pythonpath = ["."]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+# Flat-module layout: name the importable modules explicitly rather than a
+# directory, so the measured set is exactly this package's own code — never
+# the sibling tests/ or anything under the uv-managed .venv/ that shares this
+# root directory.
+source = ["vault_resolver", "frontmatter_schema", "raw_writer"]
+
 [tool.pyright]
 # Point Pyright at the uv-managed venv so it sees pydantic / pytest / tomllib.
 venvPath = "."
