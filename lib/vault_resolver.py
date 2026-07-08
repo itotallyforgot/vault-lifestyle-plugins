@@ -1,7 +1,7 @@
 """Resolve a vault path: --arg → $VAULT_PATH → user config file.
 
 Used by every ingest-direction integration to find a target vault on disk.
-A "vault" here is a markdown-vault-shaped directory: it has `raw/` and either
+A "vault" here is an Obsidian-style directory: it has `raw/` and either
 `wiki/` or `_templates/` (the latter exists in fresh public-template clones
 that haven't yet populated `wiki/`).
 """

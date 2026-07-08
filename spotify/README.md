@@ -1,7 +1,7 @@
 # vault-spotify — Spotify listening-history ingester
 
 Per-track ingester for Spotify recently-played history. Deposits
-`raw/<slug>.md` files compatible with markdown-vault's `/vault ingest`
+`raw/<slug>.md` files compatible with the vault's `/vault ingest`
 pipeline (same shape as the YouTube sibling).
 
 > **MVP — Slice 1 of 5.** This README covers Slice 1 (one-time auth

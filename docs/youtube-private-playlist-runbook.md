@@ -83,7 +83,7 @@ uv --directory youtube run vault-yt \
   --handoff /tmp/engineering-handoff.jsonl \
   --run-id engineering-$(date +%Y-%m-%d) \
   --limit 3 \
-  --vault /path/to/markdown-vault
+  --vault /path/to/vault
 ```
 
 This writes raw pages under:
@@ -106,7 +106,7 @@ uv --directory youtube run vault-yt \
   --run-id engineering-YYYY-MM-DD \
   --resume \
   --limit 10 \
-  --vault /path/to/markdown-vault
+  --vault /path/to/vault
 ```
 
 ## 5. Review The Run
@@ -115,7 +115,7 @@ uv --directory youtube run vault-yt \
 uv --directory youtube run vault-yt \
   --report \
   --run-id engineering-YYYY-MM-DD \
-  --vault /path/to/markdown-vault
+  --vault /path/to/vault
 ```
 
 Use the report to inspect written, skipped, pending, and failed videos before

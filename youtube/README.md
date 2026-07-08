@@ -40,19 +40,19 @@ Omit `[whisper]` for captions-only installs.
 Pass the vault path explicitly:
 
 ```bash
-uv --directory youtube run vault-yt "https://youtu.be/<id>" --vault /path/to/markdown-vault
+uv --directory youtube run vault-yt "https://youtu.be/<id>" --vault /path/to/vault
 ```
 
 Request captions or Whisper transcripts in another language:
 
 ```bash
-uv --directory youtube run vault-yt "https://youtu.be/<id>" --vault /path/to/markdown-vault --transcript-language fr
+uv --directory youtube run vault-yt "https://youtu.be/<id>" --vault /path/to/vault --transcript-language fr
 ```
 
 Or set `VAULT_PATH`:
 
 ```bash
-export VAULT_PATH=/path/to/markdown-vault
+export VAULT_PATH=/path/to/vault
 uv --directory youtube run vault-yt "https://youtu.be/<id>"
 ```
 
@@ -118,8 +118,8 @@ For batch parcels, omit the positional `URL` and pass `--url-file` or
 `--playlist`:
 
 ```bash
-uv --directory youtube run vault-yt --url-file engineering.txt --limit 5 --vault /path/to/markdown-vault
-uv --directory youtube run vault-yt --playlist "https://www.youtube.com/playlist?list=<id>" --limit 3 --vault /path/to/markdown-vault
+uv --directory youtube run vault-yt --url-file engineering.txt --limit 5 --vault /path/to/vault
+uv --directory youtube run vault-yt --playlist "https://www.youtube.com/playlist?list=<id>" --limit 3 --vault /path/to/vault
 ```
 
 Authenticated/private playlist access should stay outside the core ingest path.
@@ -134,7 +134,7 @@ items:
 Then process it through the same staging manifest pipeline:
 
 ```bash
-uv --directory youtube run vault-yt --handoff engineering.jsonl --run-id engineering-001 --limit 5 --vault /path/to/markdown-vault
+uv --directory youtube run vault-yt --handoff engineering.jsonl --run-id engineering-001 --limit 5 --vault /path/to/vault
 ```
 
 Validate a handoff file without a vault:
@@ -188,7 +188,7 @@ Attach a candidate finding:
 ```bash
 uv --directory youtube run vault-yt --add-finding --run-id eng-001 --video-id <id> \
   --claim "Important claim" --transcript-span "00:01:00.000 --> 00:01:08.000" \
-  --confidence 0.8 --vault /path/to/markdown-vault
+  --confidence 0.8 --vault /path/to/vault
 ```
 
 Attach verification evidence:
@@ -197,13 +197,13 @@ Attach verification evidence:
 uv --directory youtube run vault-yt --add-evidence --run-id eng-001 \
   --video-id <id> --finding-id <id>-finding-1 \
   --evidence-url "https://example.com/source" --verifier "Alex" \
-  --verification-result accepted --vault /path/to/markdown-vault
+  --verification-result accepted --vault /path/to/vault
 ```
 
 Print an operator report:
 
 ```bash
-uv --directory youtube run vault-yt --report --run-id eng-001 --vault /path/to/markdown-vault
+uv --directory youtube run vault-yt --report --run-id eng-001 --vault /path/to/vault
 ```
 
 ## Output

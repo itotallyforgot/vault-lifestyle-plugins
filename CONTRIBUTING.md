@@ -89,7 +89,7 @@ Shared code lives in `lib/` only. Per-integration code never imports from a sibl
 
 ## Output contract (ingest-direction integrations)
 
-Plug-ins that write to the vault's `raw/` MUST produce frontmatter compatible with markdown-vault's `/vault ingest` skill. See `lib/frontmatter_schema.py` for the Pydantic model + `lib/schemas/raw_frontmatter.json` for the language-agnostic JSON Schema.
+Plug-ins that write to the vault's `raw/` MUST produce frontmatter compatible with the vault's `/vault ingest` skill. See `lib/frontmatter_schema.py` for the Pydantic model + `lib/schemas/raw_frontmatter.json` for the language-agnostic JSON Schema.
 
 Required minimum frontmatter:
 - `source_url` (or `url`) — the source URL
@@ -108,9 +108,9 @@ Optional but encouraged:
 
 ## Standalone-vault rule
 
-Vault is sovereign. Plug-ins do not require modifications to markdown-vault's `skills/`, `CLAUDE.md`, or `vault_map.md`. If an integration genuinely needs vault-side changes, raise it as a separate issue against `markdown-vault` first; this repo doesn't drive vault changes.
+Vault is sovereign. Plug-ins do not require modifications to the vault's `skills/`, `CLAUDE.md`, or `vault_map.md`. If an integration genuinely needs vault-side changes, raise it as a separate issue against the vault repo first; this repo doesn't drive vault changes.
 
 ## Lineage
 
-- [markdown-vault](https://github.com/itotallyforgot/markdown-vault) — the standalone vault this overlays onto.
+- The standalone vault this overlays onto (bring your own — see the root [README](README.md#install)).
 - [vault-retrieval-engine](https://github.com/itotallyforgot/vault-retrieval-engine) — sister plug-in (retrieval) using the same vault-write contract.
