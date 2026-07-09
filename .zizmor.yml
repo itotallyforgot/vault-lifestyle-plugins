@@ -1,12 +1,6 @@
-# unpinned-uses policy:
-# First-party reusable workflows (itotallyforgot/*) are referenced by the
-# floating @v1 tag on purpose — moving that one tag re-baselines every consumer
-# repo, and the .github repo is branch-protected. Third-party actions must be
-# hash-pinned (they are, inside the reusables). So allow ref-pins for our own
-# org, require hash-pins for everyone else.
+# Dependabot owns action version bumps; every use remains immutable.
 rules:
   unpinned-uses:
     config:
       policies:
-        "itotallyforgot/*": ref-pin
         "*": hash-pin
