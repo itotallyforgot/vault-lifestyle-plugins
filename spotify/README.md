@@ -79,8 +79,8 @@ from vault_spotify.auth import (
     MissingClientIdError,
     MissingTokensError,
     SpotifyAuthError,
-    resolve_client_id,    # CLI flag → env → config file → fail
-    run_auth_dance,       # one-time browser dance + token persist
+    resolve_client_id,  # CLI flag → env → config file → fail
+    run_auth_dance,  # one-time browser dance + token persist
     load_or_refresh_token,  # used by Slice 4's `recent` command
 )
 ```
