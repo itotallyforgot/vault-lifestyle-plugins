@@ -175,6 +175,10 @@ private playlist membership metadata, but not auth credentials.
 For an end-to-end operator flow, see
 `docs/youtube-private-playlist-runbook.md`.
 
+To find which playlist videos are *not yet in the vault* (with the pagination
+and ordering guards that keep the diff honest), see
+`docs/youtube-playlist-diff-runbook.md`.
+
 Use `--run-id` to make the staging manifest name stable and `--resume` to
 continue a previous run. `--dry-run` expands the inputs and prints how many
 videos would be processed without fetching transcripts or writing a manifest.
