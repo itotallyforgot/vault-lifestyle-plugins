@@ -28,4 +28,4 @@ jobs:
       contents: read
       pull-requests: read
       security-events: write
-    uses: itotallyforgot/.github/.github/workflows/security-baseline.yml@65d14a6d444c14ea729c23b3db8b5e9ecad86c79
+    uses: itotallyforgot/.github/.github/workflows/security-baseline.yml@9bf02a92ef17bc0767896306421a677c1a4e7d7e
