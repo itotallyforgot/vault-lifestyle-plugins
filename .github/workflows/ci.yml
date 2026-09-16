@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@3ae15a252574650f697779413581c0273a4dcfa5
+    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@b76305671b21f4b8ac77b6f50039927999f63f70
     with:
       working-directory: lib
       # cov-floor gates the coverage the central reusable already measures.
@@ -42,7 +42,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@3ae15a252574650f697779413581c0273a4dcfa5
+    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@b76305671b21f4b8ac77b6f50039927999f63f70
     with:
       working-directory: youtube
       # Baseline observed on ubuntu CI: 91.29% (1390 stmts, 121 missed).
@@ -53,7 +53,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@3ae15a252574650f697779413581c0273a4dcfa5
+    uses: itotallyforgot/.github/.github/workflows/ci-python-uv.yml@b76305671b21f4b8ac77b6f50039927999f63f70
     with:
       working-directory: spotify
       # Baseline observed on ubuntu CI: 87.29% (118 stmts, 15 missed).
